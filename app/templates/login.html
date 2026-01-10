@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wipro | GenAI Academy Admin Login</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003f8c;
+            --primary-dark: #002b5c;
+            --accent: #6f2dbd;
+            --bg: #f4f5fb;
+            --card-bg: #ffffff;
+            --border-soft: #e2e8f0;
+            --text-main: #1f2933;
+            --text-muted: #6b7280;
+            --success-bg: #e6f4ea;
+            --success-border: #b7e0c2;
+            --success-text: #166534;
+            --error-bg: #fdecec;
+            --error-border: #f9c0c0;
+            --error-text: #b91c1c;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at top left, #e0ecff, transparent 55%),
+                        radial-gradient(circle at bottom right, #e9d8fd, transparent 55%),
+                        var(--bg);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top bar, consistent with other pages */
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 0.9rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 960px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: radial-gradient(circle at 10% 20%, #ffb347, transparent 40%),
+                        radial-gradient(circle at 80% 20%, #ff5c8a, transparent 45%),
+                        radial-gradient(circle at 20% 80%, #32d9c8, transparent 45%),
+                        radial-gradient(circle at 80% 80%, #6f2dbd, transparent 45%);
+        }
+
+        .brand-text h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .brand-text span {
+            display: block;
+            font-size: 0.78rem;
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            font-size: 0.8rem;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.35rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.04);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        .nav-links a.primary-link {
+            background: #ffffff;
+            color: var(--primary);
+        }
+
+        /* Centered login layout */
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2.5rem 1rem;
+        }
+
+        .login-container {
+            background: var(--card-bg);
+            border-radius: 18px;
+            padding: 2rem 2rem 2.4rem;
+            box-shadow:
+                0 20px 40px rgba(15, 23, 42, 0.12),
+                0 0 0 1px rgba(148, 163, 184, 0.18);
+            width: 100%;
+            max-width: 420px;
+            border: 1px solid var(--border-soft);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 1.8rem;
+        }
+
+        .login-header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.35rem;
+        }
+
+        .login-header p {
+            font-size: 0.86rem;
+            color: var(--text-muted);
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 1.1rem;
+        }
+
+        .flash {
+            padding: 0.8rem 0.9rem;
+            border-radius: 10px;
+            margin-bottom: 0.6rem;
+            font-size: 0.82rem;
+            font-weight: 500;
+            animation: slideIn 0.3s ease;
+            text-align: left;
+        }
+
+        .flash-success {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            color: var(--success-text);
+        }
+
+        .flash-error {
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+            color: var(--error-text);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.45rem;
+            font-weight: 500;
+            color: var(--text-main);
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.65rem 0.8rem;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.9rem;
+            background-color: #ffffff;
+            transition: all 0.16s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px rgba(0, 63, 140, 0.25);
+        }
+
+        .form-group input[type="password"] {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.12em;
+        }
+
+        .login-btn {
+            width: 100%;
+            border: none;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: #ffffff;
+            padding: 0.7rem 1rem;
+            margin-top: 0.4rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .login-btn:hover {
+            filter: brightness(1.05);
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+            transform: translateY(-1px);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: default;
+            box-shadow: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 0.8rem;
+            font-size: 0.82rem;
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 1.4rem;
+        }
+
+        .back-link a {
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 0.84rem;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .back-link a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 1px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.2s ease;
+        }
+
+        .back-link a:hover::after {
+            width: 100%;
+        }
+
+        .back-link a:hover {
+            color: var(--primary-dark);
+        }
+
+        .security-note {
+            margin-top: 1.6rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 0.9rem 0.8rem;
+            border-radius: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+
+        .security-note strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        @media (max-width: 640px) {
+            .top-bar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .main-wrapper {
+                padding: 2rem 1rem;
+            }
+
+            .login-container {
+                padding: 1.6rem 1.4rem 1.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <!-- Top bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <div class="brand">
+                <div class="brand-mark">W</div>
+                <div class="brand-text">
+                    <h1>GenAI Academy – Admin Login</h1>
+                    <span>Wipro Internal | Restricted access</span>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="primary-link">Employee Portal</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-wrapper">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>Administrator sign-in</h1>
+                <p>Access the GenAI Academy administration console.</p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form id="login-form" method="POST">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        required
+                        autocomplete="username"
+                        placeholder="Enter your admin username"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        required
+                        autocomplete="current-password"
+                        placeholder="Enter your password"
+                    >
+                </div>
+
+                <button type="submit" class="login-btn">
+                    <span>Sign in</span>
+                </button>
+
+                <div class="loading" id="loading">
+                    Authenticating. Please wait…
+                </div>
+            </form>
+
+            <div class="back-link">
+                <a href="/">← Back to Employee Portal</a>
+            </div>
+
+            <div class="security-note">
+                <strong>Security notice:</strong>
+                This console is restricted to authorised Wipro administrators. All access attempts are
+                monitored and logged. If you are not an admin, please return to the employee portal.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // On submit, show loading and hide button (same behaviour as your original)
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+        const loginBtn = document.querySelector('.login-btn');
+        const loading = document.getElementById('loading');
+
+        loginBtn.style.display = 'none';
+        loading.style.display = 'block';
+    });
+
+    // Auto-focus on username field
+    document.getElementById('username').focus();
+
+    // Clear flash messages after 6 seconds with fade effect
+    setTimeout(function() {
+        const flashMessages = document.querySelector('.flash-messages');
+        if (flashMessages) {
+            flashMessages.style.opacity = '0';
+            flashMessages.style.transition = 'opacity 0.7s ease';
+            setTimeout(function() {
+                flashMessages.style.display = 'none';
+            }, 800);
+        }
+    }, 6000);
+
+    // Enter key on password field submits the form
+    document.getElementById('password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('login-form').submit();
+        }
+    });
+</script>
+</body>
+</html>

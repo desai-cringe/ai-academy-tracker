@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wipro | GenAI Academy Data Upload</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003f8c;
+            --primary-dark: #002b5c;
+            --accent: #6f2dbd;
+            --bg: #f4f5fb;
+            --card-bg: #ffffff;
+            --border-soft: #e2e8f0;
+            --text-main: #1f2933;
+            --text-muted: #6b7280;
+            --success-bg: #e6f4ea;
+            --success-border: #b7e0c2;
+            --success-text: #166534;
+            --error-bg: #fdecec;
+            --error-border: #f9c0c0;
+            --error-text: #b91c1c;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top bar (aligned with admin/index) */
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 0.9rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: radial-gradient(circle at 10% 20%, #ffb347, transparent 40%),
+                        radial-gradient(circle at 80% 20%, #ff5c8a, transparent 45%),
+                        radial-gradient(circle at 20% 80%, #32d9c8, transparent 45%),
+                        radial-gradient(circle at 80% 80%, #6f2dbd, transparent 45%);
+        }
+
+        .brand-text h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .brand-text span {
+            display: block;
+            font-size: 0.78rem;
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            font-size: 0.82rem;
+        }
+
+        .nav-links span {
+            font-weight: 500;
+            margin-right: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.04);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        .nav-links a.primary-link {
+            background: #ffffff;
+            color: var(--primary);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1000px;
+            margin: 1.75rem auto 2.5rem;
+            padding: 0 1.5rem;
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 1.5rem;
+        }
+
+        .flash {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            animation: slideInDown 0.4s ease;
+        }
+
+        .flash-success {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            color: var(--success-text);
+        }
+
+        .flash-error {
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+            color: var(--error-text);
+        }
+
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.7rem 1.6rem 1.9rem;
+            border: 1px solid var(--border-soft);
+            box-shadow:
+                0 12px 22px rgba(15, 23, 42, 0.04),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+            margin-bottom: 1.75rem;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .card-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1.3rem;
+        }
+
+        /* Mode selection */
+        .info-section {
+            background: #f9fafb;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            padding: 1.3rem 1.1rem 1.4rem;
+            margin-bottom: 1.4rem;
+        }
+
+        .info-section h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+        }
+
+        .mode-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.9rem;
+        }
+
+        .mode-option {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .mode-option:hover {
+            border-color: var(--primary);
+            box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+        }
+
+        .mode-option.selected {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+
+        .mode-option h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+
+        .mode-option p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* File input */
+        .form-group {
+            margin-bottom: 1.3rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.55rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .file-input-container {
+            position: relative;
+        }
+
+        .file-input {
+            width: 100%;
+            padding: 1.4rem 1rem;
+            border-radius: 12px;
+            border: 2px dashed #cbd5e1;
+            background: #f9fafb;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            position: relative;
+        }
+
+        .file-input:hover {
+            border-color: var(--primary);
+            background: #f3f4ff;
+        }
+
+        .file-input input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+        }
+
+        .file-input-text {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+        }
+
+        .file-input-text small {
+            display: block;
+            margin-top: 0.3rem;
+            font-size: 0.75rem;
+        }
+
+        .file-selected {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Progress */
+        .progress-bar {
+            width: 100%;
+            height: 0.6rem;
+            background: #e5e7eb;
+            border-radius: 999px;
+            overflow: hidden;
+            margin: 0.7rem 0 1rem;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 999px;
+            transition: width 0.25s ease;
+            position: relative;
+        }
+
+        .submit-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: #ffffff;
+            border: none;
+            padding: 0.7rem 1.4rem;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            min-width: 180px;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            filter: brightness(1.05);
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Stats display */
+        .stats-display {
+            margin-top: 1.5rem;
+            display: none;
+        }
+
+        .stats-display h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.9rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .stat-item {
+            background: #f9fafb;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            padding: 0.9rem 0.8rem;
+            text-align: center;
+        }
+
+        .stat-item .number {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        .stat-item .label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Info / guidance */
+        .info-list {
+            padding-left: 1.1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .info-list li {
+            margin-bottom: 0.4rem;
+        }
+
+        .info-list strong {
+            color: var(--text-main);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .top-bar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.6rem;
+            }
+
+            .nav-links {
+                justify-content: flex-start;
+            }
+
+            main {
+                padding: 0 1rem;
+            }
+
+            .mode-options {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <!-- Top bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <div class="brand">
+                <div class="brand-mark">W</div>
+                <div class="brand-text">
+                    <h1>GenAI Academy – Data Upload</h1>
+                    <span>Wipro Internal | Learning Data Management</span>
+                </div>
+            </div>
+            <div class="nav-links">
+                <span>{{ username }}</span>
+                <a href="/admin" class="primary-link">Admin Dashboard</a>
+                <a href="/admin/change-password">Change Password</a>
+                <a href="/">Employee View</a>
+                <a href="/admin/logout">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Upload card -->
+        <section class="card">
+            <h2>Upload Learning Records</h2>
+            <p class="card-subtitle">
+                Upload curated CSV or Excel files to update GenAI learning data for employees. Choose whether to
+                replace the existing dataset or append a new batch of records.
+            </p>
+
+            <div class="info-section">
+                <h3>Upload mode</h3>
+                <div class="mode-options">
+                    <div class="mode-option" onclick="selectMode('replace')" id="replace-mode">
+                        <h4>Replace all data</h4>
+                        <p>
+                            Completely replaces the existing dataset with the uploaded file. Existing data is backed up
+                            before replacement.
+                        </p>
+                    </div>
+                    <div class="mode-option" onclick="selectMode('append')" id="append-mode">
+                        <h4>Append new records</h4>
+                        <p>
+                            Adds new records to the current dataset. Exact duplicates are detected and skipped;
+                            existing data is preserved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <form id="upload-form">
+                <input type="hidden" id="upload_type" value="replace">
+
+                <div class="form-group">
+                    <label for="file">File</label>
+                    <div class="file-input-container">
+                        <div class="file-input" onclick="document.getElementById('file-input').click()">
+                            <input type="file" id="file-input" accept=".csv,.xlsx" onchange="updateFileName()">
+                            <div class="file-input-text" id="file-text">
+                                Select a CSV or XLSX file to upload
+                                <small>Supported formats: CSV, XLSX • Maximum size: 2 GB</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submit-btn" disabled>
+                    Upload data
+                </button>
+            </form>
+
+            <!-- Upload Statistics Display -->
+            <div class="stats-display" id="stats-display">
+                <h3>Upload summary</h3>
+                <div class="stats-grid" id="stats-grid">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Guidance / info -->
+        <section class="card">
+            <h2>Data requirements & processing</h2>
+            <ul class="info-list">
+                <li>
+                    <strong>Data preparation:</strong>
+                    Uploaded data is cleaned and standardised. Level values are mapped to
+                    “Level 0”, “Level 1”, “Level 2”, “Level 3”, or “NA”.
+                </li>
+                <li>
+                    <strong>Required columns:</strong>
+                    Assessment_ID, Assessment Name, Name, Email, Employee_ID, Final Completion Date,
+                    Issuer, Level, Marks, Qualifier, Skill, Skill_ID, Valid_Till, Wipro_Function.
+                </li>
+                <li>
+                    <strong>File formats:</strong>
+                    CSV and Excel (XLSX) files are supported.
+                </li>
+                <li>
+                    <strong>File size limit:</strong>
+                    Maximum 2 GB per upload (stored in S3).
+                </li>
+                <li>
+                    <strong>Backup:</strong>
+                    Current data is backed up before replace operations.
+                </li>
+                <li>
+                    <strong>Duplicates:</strong>
+                    In append mode, records that match all key fields are treated as duplicates and skipped.
+                </li>
+                <li>
+                    <strong>Invalid records:</strong>
+                    Rows with invalid or incomplete data are automatically flagged and excluded.
+                </li>
+                <li>
+                    <strong>Cloud storage:</strong>
+                    Large files are uploaded directly to secure S3 storage, then processed asynchronously.
+                </li>
+            </ul>
+        </section>
+    </main>
+</div>
+
+<script>
+    let selectedFile = null;
+    let currentUploadMode = 'replace';
+
+    function selectMode(mode) {
+        document.querySelectorAll('.mode-option').forEach(option => {
+            option.classList.remove('selected');
+        });
+
+        document.getElementById(mode + '-mode').classList.add('selected');
+
+        currentUploadMode = mode;
+        document.getElementById('upload_type').value = mode;
+
+        const btn = document.getElementById('submit-btn');
+        if (mode === 'replace') {
+            btn.textContent = 'Upload data (replace)';
+        } else {
+            btn.textContent = 'Upload data (append)';
+        }
+    }
+
+    function updateFileName() {
+        const fileInput = document.getElementById('file-input');
+        const fileText = document.getElementById('file-text');
+        const submitBtn = document.getElementById('submit-btn');
+
+        if (fileInput.files.length > 0) {
+            selectedFile = fileInput.files[0];
+            const fileName = selectedFile.name;
+            const fileSize = (selectedFile.size / (1024 * 1024)).toFixed(2);
+            fileText.innerHTML =
+                `<div class="file-selected">${fileName}` +
+                `<br><small>${fileSize} MB</small></div>`;
+            submitBtn.disabled = false;
+        } else {
+            selectedFile = null;
+            fileText.innerHTML =
+                'Select a CSV or XLSX file to upload' +
+                '<small>Supported formats: CSV, XLSX • Maximum size: 2 GB</small>';
+            submitBtn.disabled = true;
+        }
+    }
+
+    function updateProgress(percent) {
+        const progressBar = document.getElementById('progress-bar');
+        const progressFill = document.getElementById('progress-fill');
+
+        if (percent > 0) {
+            progressBar.style.display = 'block';
+            progressFill.style.width = percent + '%';
+        } else {
+            progressBar.style.display = 'none';
+        }
+    }
+
+    function showStats(stats) {
+        const statsDisplay = document.getElementById('stats-display');
+        const statsGrid = document.getElementById('stats-grid');
+
+        const mode = stats.mode || currentUploadMode;
+        const added = Number(stats.added ?? stats.count ?? 0);
+        const duplicates = Number(stats.skipped ?? stats.duplicates ?? 0);
+        const invalid = Number(stats.invalid ?? stats.dropped ?? 0);
+        const total = Number(stats.total ?? (added + duplicates + invalid));
+
+        const addedLabel = mode === 'replace' ? 'Records loaded' : 'New records added';
+        const duplicateLabel = mode === 'replace' ? 'Duplicate rows removed' : 'Duplicates skipped';
+
+        let statsHTML = `
+            <div class="stat-item">
+                <div class="number">${added}</div>
+                <div class="label">${addedLabel}</div>
+            </div>
+            <div class="stat-item">
+                <div class="number">${duplicates}</div>
+                <div class="label">${duplicateLabel}</div>
+            </div>
+            <div class="stat-item">
+                <div class="number">${invalid}</div>
+                <div class="label">Invalid records</div>
+            </div>
+            <div class="stat-item">
+                <div class="number">${total}</div>
+                <div class="label">Total records</div>
+            </div>
+        `;
+
+        if (stats.backup) {
+            statsHTML += `
+                <div class="stat-item">
+                    <div class="number">✓</div>
+                    <div class="label">Backup created</div>
+                </div>
+            `;
+        }
+
+        statsGrid.innerHTML = statsHTML;
+        statsDisplay.style.display = 'block';
+    }
+
+    function showError(message) {
+        const flashHTML = `<div class="flash flash-error">${message}</div>`;
+        document.querySelector('main').insertAdjacentHTML('afterbegin', flashHTML);
+
+        setTimeout(() => {
+            const errorFlash = document.querySelector('.flash-error');
+            if (errorFlash) {
+                errorFlash.remove();
+            }
+        }, 10000);
+    }
+
+    function showSuccess(message) {
+        const flashHTML = `<div class="flash flash-success">${message}</div>`;
+        document.querySelector('main').insertAdjacentHTML('afterbegin', flashHTML);
+    }
+
+    async function uploadFileToS3(uploadUrl, uploadFields, file) {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+
+            Object.keys(uploadFields).forEach(key => {
+                formData.append(key, uploadFields[key]);
+            });
+
+            formData.append('file', file);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    updateProgress(percentComplete);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 204) {
+                    resolve();
+                } else {
+                    reject(new Error(`S3 upload failed with status ${xhr.status}`));
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                reject(new Error('S3 upload failed'));
+            });
+
+            xhr.open('POST', uploadUrl);
+            xhr.send(formData);
+        });
+    }
+
+    async function handleUpload(event) {
+        event.preventDefault();
+
+        if (!selectedFile) {
+            showError('Please select a file to upload.');
+            return;
+        }
+
+        const submitBtn = document.getElementById('submit-btn');
+        const originalText = submitBtn.textContent;
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Preparing upload…';
+
+            const uploadUrlResponse = await fetch('/admin/upload-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    filename: selectedFile.name,
+                    content_type: selectedFile.type || 'application/octet-stream'
+                })
+            });
+
+            const uploadUrlData = await uploadUrlResponse.json();
+
+            if (!uploadUrlData.success) {
+                throw new Error(uploadUrlData.error || 'Failed to get upload URL');
+            }
+
+            submitBtn.textContent = 'Uploading to storage…';
+            await uploadFileToS3(uploadUrlData.upload_url, uploadUrlData.upload_fields, selectedFile);
+
+            submitBtn.textContent = 'Processing data…';
+            updateProgress(0);
+
+            const processResponse = await fetch('/admin/process-upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    s3_key: uploadUrlData.s3_key,
+                    upload_type: currentUploadMode
+                })
+            });
+
+            const processData = await processResponse.json();
+
+            if (processData.success) {
+                showSuccess(processData.message);
+                if (processData.stats) {
+                    showStats(processData.stats);
+                }
+            } else {
+                throw new Error(processData.error || 'Upload processing failed');
+            }
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            showError(`Upload failed: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+            updateProgress(0);
+        }
+    }
+
+    // Initialize with replace mode selected
+    selectMode('replace');
+
+    // Handle form submission
+    document.getElementById('upload-form').addEventListener('submit', handleUpload);
+
+    // Drag & drop
+    const fileInputBox = document.querySelector('.file-input');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        fileInputBox.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        fileInputBox.addEventListener(eventName, () => {
+            fileInputBox.style.borderColor = '#003f8c';
+            fileInputBox.style.background = '#eef2ff';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        fileInputBox.addEventListener(eventName, () => {
+            fileInputBox.style.borderColor = '#cbd5e1';
+            fileInputBox.style.background = '#f9fafb';
+        }, false);
+    });
+
+    fileInputBox.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            document.getElementById('file-input').files = files;
+            updateFileName();
+        }
+    }
+
+    // Auto-dismiss flashed messages from server
+    setTimeout(function() {
+        const flashMessages = document.querySelector('.flash-messages');
+        if (flashMessages) {
+            flashMessages.style.opacity = '0';
+            flashMessages.style.transition = 'opacity 0.7s ease';
+            setTimeout(function() {
+                flashMessages.style.display = 'none';
+            }, 800);
+        }
+    }, 6000);
+</script>
+</body>
+</html>

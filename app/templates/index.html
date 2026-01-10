@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wipro | GenAI Academy Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003f8c;          /* Wipro-style deep blue */
+            --primary-dark: #002b5c;
+            --accent: #6f2dbd;           /* Purple accent */
+            --bg: #f4f5fb;
+            --card-bg: #ffffff;
+            --border-soft: #e2e8f0;
+            --text-main: #1f2933;
+            --text-muted: #6b7280;
+            --success-bg: #e6f4ea;
+            --success-border: #b7e0c2;
+            --success-text: #166534;
+            --warn-bg: #fff7e0;
+            --warn-border: #fde68a;
+            --warn-text: #92400e;
+            --error-bg: #fdecec;
+            --error-border: #f9c0c0;
+            --error-text: #b91c1c;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            color: var(--text-main);
+        }
+
+        /* Top brand bar */
+        .app-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 0.9rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: radial-gradient(circle at 10% 20%, #ffb347, transparent 40%),
+                        radial-gradient(circle at 80% 20%, #ff5c8a, transparent 45%),
+                        radial-gradient(circle at 20% 80%, #32d9c8, transparent 45%),
+                        radial-gradient(circle at 80% 80%, #6f2dbd, transparent 45%);
+        }
+
+        .brand-text h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .brand-text span {
+            display: block;
+            font-size: 0.78rem;
+            opacity: 0.9;
+        }
+
+        .top-meta {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            text-align: right;
+        }
+
+        .top-meta span {
+            display: block;
+        }
+
+        /* Main content container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 3rem;
+            flex: 1;
+        }
+
+        .header {
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        .header-title-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .header-main h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .header-main p {
+            margin-top: 0.4rem;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .header-badge {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: #e0ecff;
+            color: var(--primary);
+            padding: 0.35rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid #bfdbfe;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        /* Layout: search + results stacked */
+        .layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .search-card,
+        .results-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.75rem 1.8rem;
+            border: 1px solid var(--border-soft);
+            box-shadow:
+                0 10px 20px rgba(15, 23, 42, 0.04),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+            animation: fadeInUp 0.5s ease;
+        }
+
+        .search-card-header {
+            margin-bottom: 1.25rem;
+        }
+
+        .search-card-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .search-card-header p {
+            margin-top: 0.35rem;
+            font-size: 0.88rem;
+            color: var(--text-muted);
+        }
+
+        .search-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            padding: 0.7rem 0.9rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            border: 1px solid #cbd5e1;
+            background-color: #ffffff;
+            transition: all 0.16s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px rgba(0, 63, 140, 0.25);
+        }
+
+        .search-btn {
+            background: var(--primary);
+            color: #ffffff;
+            border: none;
+            padding: 0.8rem 1.7rem;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            text-transform: none;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .search-btn:hover {
+            background: var(--primary-dark);
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .search-btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .results-card {
+            display: none;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .results-header span {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 1.5rem 0.5rem;
+            color: var(--primary);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.2);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .progress-message {
+            padding: 1rem 1.1rem;
+            border-radius: 12px;
+            margin-bottom: 1.25rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .progress-message span.label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.8;
+        }
+
+        .progress-message span.value {
+            font-size: 0.9rem;
+        }
+
+        .progress-message.completed {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            color: var(--success-text);
+        }
+
+        .progress-message.in-progress {
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            color: var(--warn-text);
+        }
+
+        .records-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-main);
+        }
+
+        .records-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 0.9rem;
+        }
+
+        .records-table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+        }
+
+        .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px;
+            font-size: 0.82rem;
+        }
+
+        .records-table th,
+        .records-table td {
+            padding: 0.75rem 0.9rem;
+            text-align: left;
+            border-bottom: 1px solid #edf2f7;
+        }
+
+        .records-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.78rem;
+        }
+
+        .records-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .error-message {
+            background: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid var(--error-border);
+            padding: 0.85rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            animation: shake 0.3s ease;
+            text-align: left;
+        }
+
+        /* Admin link */
+        .admin-link {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            background: #ffffff;
+            color: var(--primary);
+            padding: 0.7rem 1.4rem;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+            transition: all 0.18s ease;
+            border: 1px solid #e5e7eb;
+        }
+
+        .admin-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 26px rgba(15, 23, 42, 0.25);
+            background: #f9fafb;
+        }
+
+        /* Animations */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem 1rem 2rem;
+            }
+
+            .top-bar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-title-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .search-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .admin-link {
+                bottom: 14px;
+                right: 14px;
+                padding: 0.6rem 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <!-- Top Wipro-style brand bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <div class="brand">
+                <div class="brand-mark">W</div>
+                <div class="brand-text">
+                    <h1>GenAI Academy Tracker</h1>
+                    <span>Wipro Internal | Learning Analytics</span>
+                </div>
+            </div>
+            <div class="top-meta">
+                <span>Powered by Generative AI</span>
+                <span>Employee Learning Progress Overview</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="header">
+            <div class="header-title-row">
+                <div class="header-main">
+                    <h2>Track your Generative AI learning journey</h2>
+                    <p>Enter your Wipro Employee ID to view certification and assessment details.</p>
+                </div>
+                <div>
+                    <span class="header-badge">GenAI Curriculum • Enterprise</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="layout">
+            <!-- Search Card -->
+            <section class="search-card">
+                <div class="search-card-header">
+                    <h3>Employee Lookup</h3>
+                    <p>Use your Wipro Employee ID to retrieve your GenAI assessment and certification records.</p>
+                </div>
+                <form class="search-form" onsubmit="searchEmployee(event)">
+                    <div class="form-group">
+                        <label for="employee_id">Employee ID</label>
+                        <input
+                            type="text"
+                            id="employee_id"
+                            name="employee_id"
+                            placeholder="Enter your Wipro Employee ID"
+                            required
+                        >
+                    </div>
+                    <button type="submit" class="search-btn">View My Progress</button>
+                </form>
+            </section>
+
+            <!-- Results Card -->
+            <section id="results" class="results-card">
+                <div class="results-header">
+                    <h3>Learning Summary</h3>
+                    <span>Generated based on internal assessment & certification data</span>
+                </div>
+                <div id="loading" class="loading" style="display: none;">
+                    Retrieving your learning records...
+                </div>
+                <div id="content"></div>
+            </section>
+        </section>
+    </main>
+</div>
+
+<a href="/admin/login" class="admin-link">Admin Portal</a>
+
+<script>
+    // Subtle confetti effect for completed journeys
+    function celebrateCompletion() {
+        const duration = 2500;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 25, spread: 360, ticks: 60, zIndex: 1200 };
+
+        function randomInRange(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        const interval = setInterval(function() {
+            const timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
+            }
+            const particleCount = 40 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, {
+                particleCount,
+                origin: { x: randomInRange(0.25, 0.45), y: Math.random() - 0.2 },
+                colors: ['#003f8c', '#6f2dbd', '#32d9c8', '#ffb347']
+            }));
+            confetti(Object.assign({}, defaults, {
+                particleCount,
+                origin: { x: randomInRange(0.55, 0.75), y: Math.random() - 0.2 },
+                colors: ['#003f8c', '#6f2dbd', '#32d9c8', '#ffb347']
+            }));
+        }, 220);
+    }
+
+    async function searchEmployee(event) {
+        event.preventDefault();
+
+        const employeeId = document.getElementById('employee_id').value.trim();
+        const resultsDiv = document.getElementById('results');
+        const loadingDiv = document.getElementById('loading');
+        const contentDiv = document.getElementById('content');
+
+        if (!employeeId) {
+            contentDiv.innerHTML = '<div class="error-message">Please enter a valid Employee ID.</div>';
+            resultsDiv.style.display = 'block';
+            return;
+        }
+
+        // Show results card and loading
+        resultsDiv.style.display = 'block';
+        loadingDiv.style.display = 'block';
+        contentDiv.innerHTML = '';
+
+        try {
+            const formData = new FormData();
+            formData.append('employee_id', employeeId);
+
+            const response = await fetch('/search', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            loadingDiv.style.display = 'none';
+
+            if (data.success) {
+                displayResults(data);
+
+                // Trigger confetti for completed journey
+                if (data.message && data.message.includes('Completed journey')) {
+                    setTimeout(celebrateCompletion, 400);
+                }
+            } else {
+                displayError(data.error || 'Unable to find records for the provided Employee ID.');
+            }
+
+        } catch (error) {
+            loadingDiv.style.display = 'none';
+            displayError('Network error. Please try again or contact support if the issue persists.');
+        }
+    }
+
+    function displayResults(data) {
+        const contentDiv = document.getElementById('content');
+
+        // Determine message class based on message content
+        const isCompleted = data.message && data.message.includes('Completed journey');
+        const messageClass = isCompleted ? 'completed' : 'in-progress';
+
+        const messageHTML = `
+            <div class="progress-message ${messageClass}">
+                <span class="label">Employee</span>
+                <span class="value">Employee ID: <strong>${data.employee_id}</strong></span>
+                <span class="label" style="margin-top: 0.3rem;">Status</span>
+                <span class="value"><strong>${data.message}</strong></span>
+            </div>
+        `;
+
+        let tableHTML = `
+            <div class="records-title">Learning Records</div>
+            <div class="records-subtitle">
+                Includes assessment, certification and skill details mapped to your Generative AI journey.
+            </div>
+            <div class="records-table-wrapper">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Assessment Name</th>
+                            <th>Issuer</th>
+                            <th>Level</th>
+                            <th>Qualifier</th>
+                            <th>Skill</th>
+                            <th>Skill ID</th>
+                            <th>Valid Till</th>
+                            <th>Function</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        data.records.forEach(record => {
+            tableHTML += `
+                <tr>
+                    <td>${record['Assessment Name'] || 'N/A'}</td>
+                    <td>${record.Issuer || 'N/A'}</td>
+                    <td>${record.Level || 'N/A'}</td>
+                    <td>${record.Qualifier || 'N/A'}</td>
+                    <td>${record.Skill || 'N/A'}</td>
+                    <td>${record.Skill_ID || 'N/A'}</td>
+                    <td>${record.Valid_Till || 'N/A'}</td>
+                    <td>${record.Wipro_Function || 'N/A'}</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        contentDiv.innerHTML = messageHTML + tableHTML;
+    }
+
+    function displayError(errorMessage) {
+        const contentDiv = document.getElementById('content');
+        contentDiv.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+    }
+</script>
+</body>
+</html>

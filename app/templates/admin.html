@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wipro | GenAI Academy Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003f8c;
+            --primary-dark: #002b5c;
+            --accent: #6f2dbd;
+            --bg: #f4f5fb;
+            --card-bg: #ffffff;
+            --border-soft: #e2e8f0;
+            --text-main: #1f2933;
+            --text-muted: #6b7280;
+            --success-bg: #e6f4ea;
+            --success-border: #b7e0c2;
+            --success-text: #166534;
+            --error-bg: #fdecec;
+            --error-border: #f9c0c0;
+            --error-text: #b91c1c;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top bar */
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 0.9rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: radial-gradient(circle at 10% 20%, #ffb347, transparent 40%),
+                        radial-gradient(circle at 80% 20%, #ff5c8a, transparent 45%),
+                        radial-gradient(circle at 20% 80%, #32d9c8, transparent 45%),
+                        radial-gradient(circle at 80% 80%, #6f2dbd, transparent 45%);
+        }
+
+        .brand-text h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .brand-text span {
+            display: block;
+            font-size: 0.78rem;
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 0.82rem;
+        }
+
+        .nav-welcome {
+            margin-right: 0.5rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.04);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        .nav-links a.primary-link {
+            background: #ffffff;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .nav-links a.danger-link {
+            border-color: rgba(248, 113, 113, 0.7);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1400px;
+            margin: 1.75rem auto 2.5rem;
+            padding: 0 1.5rem;
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 1.5rem;
+        }
+
+        .flash {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            animation: slideInDown 0.4s ease;
+        }
+
+        .flash-success {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            color: var(--success-text);
+        }
+
+        .flash-error {
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+            color: var(--error-text);
+        }
+
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 14px;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid var(--border-soft);
+            box-shadow:
+                0 10px 18px rgba(15, 23, 42, 0.04),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        /* Chart section */
+        .chart-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.6rem 1.6rem 1.8rem;
+            border: 1px solid var(--border-soft);
+            box-shadow:
+                0 12px 22px rgba(15, 23, 42, 0.04),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+            margin-bottom: 2rem;
+        }
+
+        .chart-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-end;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-header-text h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .chart-header-text p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .issuer-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-width: 220px;
+        }
+
+        .issuer-selector label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .issuer-selector select {
+            padding: 0.55rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-soft);
+            background-color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            outline: none;
+            transition: all 0.18s ease;
+        }
+
+        .issuer-selector select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px rgba(0, 63, 140, 0.25);
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .chart-wrapper {
+            background: #f9fafb;
+            border-radius: 14px;
+            padding: 1rem 1.1rem 1.2rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .chart-wrapper h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            color: var(--text-main);
+            text-align: left;
+        }
+
+        .chart-container {
+            height: 280px;
+            position: relative;
+        }
+
+        /* Data section */
+        .data-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.7rem 1.6rem 1.8rem;
+            border: 1px solid var(--border-soft);
+            box-shadow:
+                0 12px 22px rgba(15, 23, 42, 0.04),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.4rem;
+            align-items: center;
+        }
+
+        .section-header h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .section-header-subtitle {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.55rem 1rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            text-decoration: none;
+            transition: all 0.16s ease;
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: #ffffff;
+            border-color: transparent;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.05);
+        }
+
+        .btn-outline {
+            background: #ffffff;
+            border-color: #d1d5db;
+            color: var(--primary);
+        }
+
+        .btn-subtle {
+            background: #f3f4f6;
+            border-color: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Table */
+        .table-container {
+            margin-top: 0.8rem;
+            max-height: 540px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: auto;
+            background: #ffffff;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 0.65rem 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid #edf2f7;
+            white-space: nowrap;
+        }
+
+        .data-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .data-table tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .data-table tbody tr:hover {
+            background: #eef2ff;
+        }
+
+        .empty-state {
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+        }
+
+        .empty-state h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.7rem;
+            color: var(--text-main);
+        }
+
+        .empty-state p {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 1.2rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .top-bar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .nav-links {
+                justify-content: flex-start;
+            }
+
+            .chart-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .issuer-selector {
+                width: 100%;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-width: 640px) {
+            main {
+                padding: 0 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .data-table {
+                font-size: 0.76rem;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 0.55rem 0.65rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <!-- Top Wipro-style bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <div class="brand">
+                <div class="brand-mark">W</div>
+                <div class="brand-text">
+                    <h1>GenAI Academy – Admin</h1>
+                    <span>Wipro Internal | Learning Operations</span>
+                </div>
+            </div>
+            <div class="nav-links">
+                <span class="nav-welcome">Welcome, {{ username }}!</span>
+                <a href="/admin/chat" class="primary-link">AI Assistant</a>
+                <a href="/dbadmin">DB Browser</a>
+                <a href="/admin/upload">Upload Data</a>
+                <a href="/admin/change-password">Change Password</a>
+                <a href="/">Employee View</a>
+                <a href="/admin/logout" class="danger-link">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- KPI cards -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Total Employees</span>
+                <span class="stat-value">{{ stats.total_employees }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Completed Journey</span>
+                <span class="stat-value">{{ stats.completed_journey }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">In Progress</span>
+                <span class="stat-value">{{ stats.in_progress }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">S3 Records</span>
+                <span class="stat-value">{{ stats.all_records }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">DB Records</span>
+                <span class="stat-value">{{ stats.rds_records }}</span>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="chart-section">
+            <div class="chart-header">
+                <div class="chart-header-text">
+                    <h2>Certification & Training Distribution</h2>
+                    <p>Breakdown of certified and trained employees across levels and issuers.</p>
+                </div>
+                <div class="issuer-selector">
+                    <label for="cert-issuer-select">Filter by Issuer</label>
+                    <select id="cert-issuer-select">
+                        <option value="">All Issuers</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <h3>Certified Employees by Level</h3>
+                    <div class="chart-container">
+                        <canvas id="certifiedChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-wrapper">
+                    <h3>Trained Employees by Level</h3>
+                    <div class="chart-container">
+                        <canvas id="trainedChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data table -->
+        <section class="data-section">
+            <div class="section-header">
+                <div class="header-left">
+                    <h2>Employee Learning Records</h2>
+                    <p class="section-header-subtitle">
+                        Detailed records across assessments, skills, issuers and Wipro functions.
+                    </p>
+                </div>
+                <div class="action-buttons">
+                    <a href="/admin/chat" class="btn btn-outline">Open AI Assistant</a>
+                    <a href="/dbadmin" class="btn btn-outline">Browse Database</a>
+                    <button onclick="refreshKnowledgeBase(event)" class="btn btn-subtle" id="kb-refresh-btn">
+                        Refresh Knowledge Base
+                    </button>
+                    <a href="/admin/upload" class="btn btn-primary">Upload New Data</a>
+                    <button onclick="refreshPage()" class="btn btn-subtle">Refresh View</button>
+                </div>
+            </div>
+
+            {% if employees %}
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Assessment Name</th>
+                                <th>Level</th>
+                                <th>Qualifier</th>
+                                <th>Skill</th>
+                                <th>Skill ID</th>
+                                <th>Valid Till</th>
+                                <th>Wipro Function</th>
+                                <th>Issuer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for employee in employees %}
+                                <tr>
+                                    <td>{{ employee['Employee_ID'] }}</td>
+                                    <td>{{ employee['Assessment Name'] }}</td>
+                                    <td>{{ employee['Level'] }}</td>
+                                    <td>{{ employee['Qualifier'] }}</td>
+                                    <td>{{ employee['Skill'] }}</td>
+                                    <td>{{ employee['Skill_ID'] }}</td>
+                                    <td>{{ employee['Valid_Till'] }}</td>
+                                    <td>{{ employee['Wipro_Function'] }}</td>
+                                    <td>{{ employee['Issuer'] }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No employee data available</h3>
+                    <p>Upload your first set of learning records to start tracking GenAI adoption.</p>
+                    <a href="/admin/upload" class="btn btn-primary">Upload Data</a>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+</div>
+
+<script>
+    let certifiedChart;
+    let trainedChart;
+
+    async function loadCertificationCharts(issuer = "") {
+        try {
+            let url = '/admin/certification-data';
+            if (issuer) {
+                url += '?issuer=' + encodeURIComponent(issuer);
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                console.error('Chart data error:', data.error);
+                return;
+            }
+
+            // Update issuer dropdown
+            const select = document.getElementById('cert-issuer-select');
+            if (select.options.length <= 1) {
+                data.issuers.forEach(function(issuerName) {
+                    const option = document.createElement('option');
+                    option.value = issuerName;
+                    option.textContent = issuerName;
+                    select.appendChild(option);
+                });
+            }
+            select.value = issuer;
+
+            // Destroy old charts
+            if (certifiedChart) certifiedChart.destroy();
+            if (trainedChart) trainedChart.destroy();
+
+            // Certified Chart
+            const ctxCertified = document.getElementById('certifiedChart').getContext('2d');
+            certifiedChart = new Chart(ctxCertified, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Certified Employees',
+                        data: data.certified,
+                        backgroundColor: [
+                            'rgba(52, 211, 153, 0.8)',
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(22, 163, 74, 0.8)',
+                            'rgba(20, 83, 45, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(52, 211, 153, 1)',
+                            'rgba(34, 197, 94, 1)',
+                            'rgba(22, 163, 74, 1)',
+                            'rgba(20, 83, 45, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                font: { size: 11, weight: 600 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15,23,42,0.9)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Certified: ' + context.parsed.y + ' employees';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Trained Chart
+            const ctxTrained = document.getElementById('trainedChart').getContext('2d');
+            trainedChart = new Chart(ctxTrained, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Trained Employees',
+                        data: data.trained,
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(37, 99, 235, 0.8)',
+                            'rgba(29, 78, 216, 0.8)',
+                            'rgba(30, 58, 138, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(37, 99, 235, 1)',
+                            'rgba(29, 78, 216, 1)',
+                            'rgba(30, 58, 138, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                font: { size: 11, weight: 600 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15,23,42,0.9)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Trained: ' + context.parsed.y + ' employees';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Error loading charts:', error);
+        }
+    }
+
+    function refreshPage() {
+        window.location.reload();
+    }
+
+    async function refreshKnowledgeBase(event) {
+        if (!confirm(
+            'Refresh knowledge base from the current database?\n\n' +
+            'This will recreate the AI chat knowledge base from all records in the database.'
+        )) {
+            return;
+        }
+
+        const btn = document.getElementById('kb-refresh-btn') || event.target;
+
+        try {
+            btn.textContent = 'Refreshing...';
+            btn.disabled = true;
+
+            const response = await fetch('/admin/refresh-knowledge-base', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            btn.textContent = 'Refresh Knowledge Base';
+            btn.disabled = false;
+
+            if (data.success) {
+                alert(data.message + '\n\nYou can now use the AI Assistant with updated data.');
+            } else {
+                alert('Error: ' + (data.error || 'Unable to refresh knowledge base.'));
+            }
+        } catch (error) {
+            btn.textContent = 'Refresh Knowledge Base';
+            btn.disabled = false;
+            alert('Error: ' + error.message);
+        }
+    }
+
+    // Issuer filter change
+    document.getElementById('cert-issuer-select').addEventListener('change', function() {
+        loadCertificationCharts(this.value);
+    });
+
+    // On page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCertificationCharts();
+
+        // Auto-dismiss flash messages
+        setTimeout(function() {
+            const flashMessages = document.querySelector('.flash-messages');
+            if (flashMessages) {
+                flashMessages.style.opacity = '0';
+                flashMessages.style.transition = 'opacity 0.7s ease';
+                setTimeout(function() {
+                    flashMessages.style.display = 'none';
+                }, 800);
+            }
+        }, 5000);
+    });
+
+    // Auto-refresh charts every 30 seconds
+    setInterval(function() {
+        const currentIssuer = document.getElementById('cert-issuer-select').value;
+        loadCertificationCharts(currentIssuer);
+    }, 30000);
+</script>
+</body>
+</html>
