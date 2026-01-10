@@ -42,6 +42,7 @@ S3_ENABLED = os.getenv('S3_ENABLED', 'true').lower() == 'true'
 S3_CURRENT_DATA_KEY = 'processed-data/current/employee.csv'
 S3_BACKUP_PREFIX = 'processed-data/backups/'
 S3_RAW_UPLOADS_PREFIX = 'raw-uploads/'
+S3_DUPLICATES_PREFIX = 'processed-data/duplicates/'
 
 # AWS client config
 aws_config = None
@@ -202,6 +203,34 @@ class S3FileManager:
         except Exception as e:
             logger.error(f"❌ Error writing to S3: {e}")
             return False, f"Write error: {str(e)}"
+
+    def generate_presigned_download_url(
+        self,
+        s3_key,
+        *,
+        filename: str,
+        expires_in: int = 3600,
+        content_type: str = 'application/octet-stream'
+    ):
+        """Generate a presigned URL for downloading a file."""
+        if not self.s3_client:
+            return None, "S3 client not available"
+        try:
+            response = self.s3_client.generate_presigned_url(
+                ClientMethod='get_object',
+                Params={
+                    'Bucket': S3_BUCKET_NAME,
+                    'Key': s3_key,
+                    'ResponseContentDisposition': f'attachment; filename="{filename}"',
+                    'ResponseContentType': content_type,
+                },
+                ExpiresIn=expires_in
+            )
+            logger.info(f"✅ Generated presigned download URL for {s3_key}")
+            return response, None
+        except Exception as e:
+            logger.error(f"❌ Error generating presigned download URL: {e}")
+            return None, f"Download URL generation failed: {str(e)}"
 
     def copy_file_in_s3(self, source_key, dest_key):
         """Copy file within S3."""

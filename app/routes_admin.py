@@ -5,10 +5,12 @@ import gc
 import re
 import os
 import tempfile
+import uuid
 from io import BytesIO
 import time
 
 import pandas as pd
+from openpyxl import Workbook
 from flask import (
     render_template, request, jsonify, session, redirect,
     url_for, flash
@@ -19,7 +21,7 @@ from sqlalchemy import func
 
 from .extensions import db
 from .models import EmployeeRecord
-from .aws_utils import s3_manager, call_bedrock_with_context
+from .aws_utils import s3_manager, call_bedrock_with_context, S3_DUPLICATES_PREFIX
 from .services import (
     read_employee_data_sample_from_rds,
     get_employee_stats_cached,
@@ -40,9 +42,9 @@ from .services import (
     write_employee_csv_string_to_s3,
     create_enhanced_knowledge_base_from_rds,
     get_existing_dedup_keys,
-    filter_new_records_for_append,
     export_rds_to_csv_snapshot,
-    _deduplicate_cleaned_dataframe,
+    split_duplicates_in_cleaned_dataframe,
+    split_new_records_for_append,
 )
 
 logger = logging.getLogger(__name__)
@@ -371,6 +373,88 @@ Answer the user's question below."""
                     continue
             return None
 
+        class DuplicateWorkbookWriter:
+            def __init__(self, columns):
+                self.columns = columns
+                self.workbook = Workbook(write_only=True)
+                self.sheet = self.workbook.create_sheet(title="Duplicates")
+                self.sheet.append(columns)
+                self.row_count = 0
+
+            def append_dataframe(self, df: pd.DataFrame):
+                if df is None or df.empty:
+                    return
+                data = df[self.columns]
+                for row in data.itertuples(index=False, name=None):
+                    self.sheet.append(list(row))
+                self.row_count += len(data)
+
+            def save(self, path: str):
+                self.workbook.save(path)
+
+        duplicate_writer = None
+        duplicate_row_count = 0
+        excel_mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+        def append_duplicates(df: pd.DataFrame):
+            nonlocal duplicate_writer, duplicate_row_count
+            if df is None or df.empty:
+                return
+            if duplicate_writer is None:
+                duplicate_writer = DuplicateWorkbookWriter(REQUIRED_COLUMNS)
+            duplicate_writer.append_dataframe(df)
+            duplicate_row_count += len(df)
+
+        def finalize_duplicate_file():
+            if duplicate_writer is None or duplicate_row_count == 0:
+                return None
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            unique_id = uuid.uuid4().hex
+            filename = f"duplicates_{timestamp}_{unique_id}.xlsx"
+            s3_key = f"{S3_DUPLICATES_PREFIX}{filename}"
+            temp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+            try:
+                duplicate_writer.save(temp_path)
+                with open(temp_path, 'rb') as handle:
+                    content = handle.read()
+                success, error = s3_manager.write_file_to_s3(
+                    s3_key,
+                    content,
+                    content_type=excel_mime
+                )
+                if not success:
+                    log_step(f"Failed to upload duplicates file to S3: {error}")
+                    return None
+                download_url, url_error = s3_manager.generate_presigned_download_url(
+                    s3_key,
+                    filename=filename,
+                    content_type=excel_mime
+                )
+                if url_error:
+                    log_step(f"Failed to create download URL for duplicates: {url_error}")
+                    return None
+                return {
+                    'filename': filename,
+                    'url': download_url,
+                    'count': duplicate_row_count
+                }
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+
+        def build_success_response(message: str, stats: dict):
+            response = {
+                'success': True,
+                'message': message,
+                'stats': stats
+            }
+            duplicates_file = finalize_duplicate_file()
+            if duplicates_file:
+                response['duplicates_file'] = duplicates_file
+            return jsonify(response)
+
         try:
             log_step("Request received")
             data = request.get_json()
@@ -463,10 +547,13 @@ Answer the user's question below."""
                     })
 
                 dedup_keys_in_file: set[str] = set()
-                df_cleaned, duplicates_in_file, dedup_keys_in_file = _deduplicate_cleaned_dataframe(
-                    df_cleaned,
-                    dedup_keys_in_file
+                df_cleaned, duplicates_df, duplicates_in_file, dedup_keys_in_file = (
+                    split_duplicates_in_cleaned_dataframe(
+                        df_cleaned,
+                        dedup_keys_in_file
+                    )
                 )
+                append_duplicates(duplicates_df)
                 if df_cleaned is None or df_cleaned.empty:
                     s3_manager.delete_file(s3_key)
                     log_step("Uploaded XLSX contained only duplicate rows after deduplication")
@@ -481,7 +568,10 @@ Answer the user's question below."""
                 s3_error = None
 
                 if mode == 'append':
-                    df_for_db, duplicates_skipped = filter_new_records_for_append(df_cleaned, existing_keys)
+                    df_for_db, duplicates_existing_df, duplicates_skipped = (
+                        split_new_records_for_append(df_cleaned, existing_keys)
+                    )
+                    append_duplicates(duplicates_existing_df)
                     duplicates_skipped = int(duplicates_skipped)
                     duplicates_total = int(duplicates_in_file + duplicates_skipped)
                     cleaned_rows = int(len(df_for_db))
@@ -495,10 +585,9 @@ Answer the user's question below."""
                         s3_manager.delete_file(s3_key)
                         invalidate_stats_cache()
                         log_step("No new rows to append after deduplication")
-                        return jsonify({
-                            'success': True,
-                            'message': 'No new records to append; all rows were duplicates.',
-                            'stats': {
+                        return build_success_response(
+                            'No new records to append; all rows were duplicates.',
+                            {
                                 'mode': 'append',
                                 'count': 0,
                                 'added': 0,
@@ -510,7 +599,7 @@ Answer the user's question below."""
                                 'rds_success': True,
                                 's3_success': True
                             }
-                        })
+                        )
 
                     rds_result, rds_error = save_cleaned_data_chunk_to_rds(
                         df_for_db,
@@ -605,11 +694,7 @@ Answer the user's question below."""
 
                 logger.info(f"✅ Upload (XLSX) processed successfully: {success_msg}")
                 log_step("Finished process_upload for XLSX successfully (returning 200)")
-                return jsonify({
-                    'success': True,
-                    'message': success_msg,
-                    'stats': result_stats
-                })
+                return build_success_response(success_msg, result_stats)
 
             # --- CSV path: streaming in chunks --- #
             encoding = detect_csv_encoding(file_content)
@@ -674,10 +759,13 @@ Answer the user's question below."""
                                 })
                             required_checked = True
 
-                        cleaned_chunk, chunk_duplicates, dedup_keys_in_file = _deduplicate_cleaned_dataframe(
-                            cleaned_chunk,
-                            dedup_keys_in_file
+                        cleaned_chunk, duplicates_df, chunk_duplicates, dedup_keys_in_file = (
+                            split_duplicates_in_cleaned_dataframe(
+                                cleaned_chunk,
+                                dedup_keys_in_file
+                            )
                         )
+                        append_duplicates(duplicates_df)
                         duplicates_in_file += chunk_duplicates
                         if cleaned_chunk is None or cleaned_chunk.empty:
                             continue
@@ -782,11 +870,7 @@ Answer the user's question below."""
 
                     logger.info(f"✅ Upload (CSV) processed successfully: {success_msg}")
                     log_step("Finished process_upload for CSV successfully (returning 200)")
-                    return jsonify({
-                        'success': True,
-                        'message': success_msg,
-                        'stats': result_stats
-                    })
+                    return build_success_response(success_msg, result_stats)
                 except Exception as processing_error:
                     try:
                         temp_file.close()
@@ -835,7 +919,11 @@ Answer the user's question below."""
                                 })
                             required_checked = True
 
-                        deduped_chunk, dupes = filter_new_records_for_append(cleaned_chunk, existing_keys)
+                        deduped_chunk, duplicates_df, dupes = split_new_records_for_append(
+                            cleaned_chunk,
+                            existing_keys
+                        )
+                        append_duplicates(duplicates_df)
                         if deduped_chunk is None or deduped_chunk.empty:
                             total_duplicates += dupes
                             continue
@@ -858,10 +946,9 @@ Answer the user's question below."""
                     if total_cleaned_rows == 0:
                         s3_manager.delete_file(s3_key)
                         log_step("No new rows to append after deduplication")
-                        return jsonify({
-                            'success': True,
-                            'message': 'No new records to append; all rows were duplicates.',
-                            'stats': {
+                        return build_success_response(
+                            'No new records to append; all rows were duplicates.',
+                            {
                                 'mode': 'append',
                                 'count': 0,
                                 'added': 0,
@@ -873,7 +960,7 @@ Answer the user's question below."""
                                 'rds_success': True,
                                 's3_success': True
                             }
-                        })
+                        )
 
                     dropped_rows = int(total_original_rows - total_cleaned_rows)
                     log_step(
@@ -929,11 +1016,7 @@ Answer the user's question below."""
 
                     logger.info(f"✅ Upload (CSV append) processed successfully: {success_msg}")
                     log_step("Finished process_upload for CSV append successfully (returning 200)")
-                    return jsonify({
-                        'success': True,
-                        'message': success_msg,
-                        'stats': result_stats
-                    })
+                    return build_success_response(success_msg, result_stats)
                 except Exception as processing_error:
                     s3_manager.delete_file(s3_key)
                     logger.error(f"❌ Processing error (CSV append): {processing_error}")
