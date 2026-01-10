@@ -6,9 +6,12 @@ import gc
 import os
 import tempfile
 import csv
+from collections import Counter
 from datetime import datetime
 from io import StringIO
 from typing import Optional, Dict, Tuple, List, Set
+
+from dateutil import parser as date_parser
 
 import pandas as pd
 from sqlalchemy import func, text
@@ -472,6 +475,76 @@ def get_chart_data_from_rds(issuer_filter: str = "") -> Dict:
             'labels': ['Level 0', 'Level 1', 'Level 2'],
             'values': [0, 0, 0],
             'issuers': []
+        }
+
+
+def get_advanced_insights_data() -> Dict:
+    """Build advanced KPI + chart data for executive insights."""
+    try:
+        level_counts = Counter()
+        issuer_counts = Counter()
+        skill_counts = Counter()
+        qualifier_counts = Counter()
+        completion_month_counts = Counter()
+
+        query = db.session.query(
+            EmployeeRecord.level,
+            EmployeeRecord.issuer,
+            EmployeeRecord.skill,
+            EmployeeRecord.qualifier,
+            EmployeeRecord.final_completion_date,
+        )
+
+        for level, issuer, skill, qualifier, completion_date in query.yield_per(CHUNK_SIZE):
+            if level:
+                normalized_level = level.strip()
+                level_counts[normalized_level] += 1
+            if issuer:
+                issuer_counts[issuer.strip()] += 1
+            if skill:
+                skill_counts[skill.strip()] += 1
+            if qualifier:
+                qualifier_counts[qualifier.strip()] += 1
+            if completion_date:
+                try:
+                    parsed_date = date_parser.parse(completion_date)
+                    month_key = parsed_date.strftime('%Y-%m')
+                    completion_month_counts[month_key] += 1
+                except Exception:
+                    continue
+
+        top_issuers = issuer_counts.most_common(10)
+        top_skills = skill_counts.most_common(10)
+        qualifier_breakdown = qualifier_counts.most_common(6)
+
+        months_sorted = sorted(completion_month_counts.keys())
+        completion_values = [completion_month_counts[m] for m in months_sorted]
+
+        return {
+            "level_labels": list(level_counts.keys()) or ["Level 0", "Level 1", "Level 2"],
+            "level_values": list(level_counts.values()) or [0, 0, 0],
+            "issuer_labels": [item[0] for item in top_issuers],
+            "issuer_values": [item[1] for item in top_issuers],
+            "skill_labels": [item[0] for item in top_skills],
+            "skill_values": [item[1] for item in top_skills],
+            "qualifier_labels": [item[0] for item in qualifier_breakdown],
+            "qualifier_values": [item[1] for item in qualifier_breakdown],
+            "completion_months": months_sorted,
+            "completion_values": completion_values,
+        }
+    except Exception as e:
+        logger.error(f"❌ Error building advanced insights: {e}")
+        return {
+            "level_labels": ["Level 0", "Level 1", "Level 2"],
+            "level_values": [0, 0, 0],
+            "issuer_labels": [],
+            "issuer_values": [],
+            "skill_labels": [],
+            "skill_values": [],
+            "qualifier_labels": [],
+            "qualifier_values": [],
+            "completion_months": [],
+            "completion_values": [],
         }
 
 
