@@ -124,24 +124,40 @@ def _deduplicate_cleaned_dataframe(
     Remove duplicate rows from a cleaned DataFrame using the standard dedup key.
     Returns (deduped_df, duplicate_count, updated_seen_keys).
     """
+    deduped_df, _duplicate_df, duplicate_count, updated_seen_keys = (
+        split_duplicates_in_cleaned_dataframe(df, seen_keys)
+    )
+    return deduped_df, duplicate_count, updated_seen_keys
+
+
+def split_duplicates_in_cleaned_dataframe(
+    df: pd.DataFrame,
+    seen_keys: Optional[Set[str]] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame, int, Set[str]]:
+    """
+    Split duplicates from a cleaned DataFrame using the standard dedup key.
+    Returns (deduped_df, duplicates_df, duplicate_count, updated_seen_keys).
+    """
     if seen_keys is None:
         seen_keys = set()
 
     if df is None or df.empty:
-        return pd.DataFrame(), 0, seen_keys
+        return pd.DataFrame(), pd.DataFrame(), 0, seen_keys
 
     df_for_keys = _map_df_to_db_columns(df).fillna("")
     df_for_keys['__dedup_key'] = df_for_keys.apply(_build_dedup_key_from_row, axis=1)
 
     already_seen_mask = df_for_keys['__dedup_key'].isin(seen_keys)
     duplicate_within_chunk_mask = df_for_keys['__dedup_key'].duplicated()
-    unique_mask = ~(already_seen_mask | duplicate_within_chunk_mask)
+    duplicate_mask = already_seen_mask | duplicate_within_chunk_mask
+    unique_mask = ~duplicate_mask
 
-    duplicate_count = int((already_seen_mask | duplicate_within_chunk_mask).sum())
+    duplicate_count = int(duplicate_mask.sum())
     deduped_df = df.loc[unique_mask.values].copy()
+    duplicates_df = df.loc[duplicate_mask.values].copy()
     seen_keys.update(df_for_keys.loc[unique_mask, '__dedup_key'].astype(str))
 
-    return deduped_df, duplicate_count, seen_keys
+    return deduped_df, duplicates_df, duplicate_count, seen_keys
 
 
 def get_existing_dedup_keys(batch_size: int = CHUNK_SIZE) -> Set[str]:
@@ -162,8 +178,23 @@ def filter_new_records_for_append(df_chunk: pd.DataFrame, existing_keys: Set[str
     Remove duplicates from a cleaned chunk using existing dedup keys.
     Returns (df_mapped_for_db, duplicate_count).
     """
+    new_records, _duplicates_df, duplicate_count = split_new_records_for_append(
+        df_chunk,
+        existing_keys
+    )
+    return new_records, duplicate_count
+
+
+def split_new_records_for_append(
+    df_chunk: pd.DataFrame,
+    existing_keys: Set[str]
+) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
+    """
+    Split new records and duplicates from a cleaned chunk using existing dedup keys.
+    Returns (df_mapped_for_db, duplicates_df, duplicate_count).
+    """
     if df_chunk is None or df_chunk.empty:
-        return pd.DataFrame(), 0
+        return pd.DataFrame(), pd.DataFrame(), 0
 
     df_for_db = _map_df_to_db_columns(df_chunk).fillna("")
     df_for_db['__dedup_key'] = df_for_db.apply(_build_dedup_key_from_row, axis=1)
@@ -171,16 +202,17 @@ def filter_new_records_for_append(df_chunk: pd.DataFrame, existing_keys: Set[str
     dedup_keys_series = df_for_db['__dedup_key']
     existing_mask = dedup_keys_series.isin(existing_keys)
     duplicate_within_chunk_mask = dedup_keys_series.duplicated()
-    unique_mask = ~(existing_mask | duplicate_within_chunk_mask)
-    unique_count = int(unique_mask.sum())
-    duplicate_count = int(len(df_for_db) - unique_count)
+    duplicate_mask = existing_mask | duplicate_within_chunk_mask
+    unique_mask = ~duplicate_mask
 
+    duplicate_count = int(duplicate_mask.sum())
     new_records = df_for_db[unique_mask.values].copy()
+    duplicates_df = df_chunk.loc[duplicate_mask.values].copy()
     new_keys = set(new_records['__dedup_key'].tolist())
     existing_keys.update(new_keys)
 
     new_records.drop(columns=['__dedup_key'], inplace=True)
-    return new_records, duplicate_count
+    return new_records, duplicates_df, duplicate_count
 
 
 def export_rds_to_csv_snapshot() -> Tuple[bool, Optional[str]]:

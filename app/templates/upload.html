@@ -354,6 +354,51 @@
             transform: none;
         }
 
+        .download-panel {
+            margin-top: 1rem;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .download-title {
+            font-weight: 600;
+            font-size: 0.92rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .download-subtitle {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1.1rem;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 1px solid #d0d7e2;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .download-link:hover {
+            border-color: var(--primary);
+            box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+
         /* Stats display */
         .stats-display {
             margin-top: 1.5rem;
@@ -527,6 +572,17 @@
                 <div class="stats-grid" id="stats-grid">
                     <!-- populated by JS -->
                 </div>
+                <div class="download-panel" id="duplicates-download">
+                    <div>
+                        <div class="download-title">Duplicates removed</div>
+                        <div class="download-subtitle" id="duplicates-download-note">
+                            Download the removed duplicate rows.
+                        </div>
+                    </div>
+                    <a class="download-link" id="duplicates-download-link" href="#" download>
+                        Download duplicates
+                    </a>
+                </div>
             </div>
         </section>
 
@@ -674,6 +730,30 @@
         statsDisplay.style.display = 'block';
     }
 
+    function showDuplicatesDownload(fileInfo) {
+        const panel = document.getElementById('duplicates-download');
+        const link = document.getElementById('duplicates-download-link');
+        const note = document.getElementById('duplicates-download-note');
+
+        if (!fileInfo || !fileInfo.url) {
+            panel.style.display = 'none';
+            link.removeAttribute('href');
+            return;
+        }
+
+        link.href = fileInfo.url;
+        link.textContent = `Download duplicates (${fileInfo.count || 0})`;
+        note.textContent = `Excel file with ${fileInfo.count || 0} duplicate rows removed.`;
+        panel.style.display = 'flex';
+    }
+
+    function resetDuplicatesDownload() {
+        const panel = document.getElementById('duplicates-download');
+        const link = document.getElementById('duplicates-download-link');
+        panel.style.display = 'none';
+        link.removeAttribute('href');
+    }
+
     function showError(message) {
         const flashHTML = `<div class="flash flash-error">${message}</div>`;
         document.querySelector('main').insertAdjacentHTML('afterbegin', flashHTML);
@@ -741,6 +821,7 @@
         try {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Preparing upload…';
+            resetDuplicatesDownload();
 
             const uploadUrlResponse = await fetch('/admin/upload-url', {
                 method: 'POST',
@@ -782,6 +863,9 @@
                 showSuccess(processData.message);
                 if (processData.stats) {
                     showStats(processData.stats);
+                }
+                if (processData.duplicates_file) {
+                    showDuplicatesDownload(processData.duplicates_file);
                 }
             } else {
                 throw new Error(processData.error || 'Upload processing failed');
