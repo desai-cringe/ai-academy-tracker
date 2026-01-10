@@ -1,7 +1,10 @@
 # app/aws_utils.py
 
+import json
 import logging
 import os
+import time
+import uuid
 from datetime import datetime
 
 try:
@@ -37,11 +40,15 @@ BEDROCK_MODEL_ID = os.getenv(
 
 S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'ai-academy-tracker-uploads')
 S3_ENABLED = os.getenv('S3_ENABLED', 'true').lower() == 'true'
+POLLY_ENABLED = os.getenv('POLLY_ENABLED', 'true').lower() == 'true'
+TRANSCRIBE_ENABLED = os.getenv('TRANSCRIBE_ENABLED', 'true').lower() == 'true'
 
 # S3 keys for data storage
 S3_CURRENT_DATA_KEY = 'processed-data/current/employee.csv'
 S3_BACKUP_PREFIX = 'processed-data/backups/'
 S3_RAW_UPLOADS_PREFIX = 'raw-uploads/'
+S3_VOICE_INPUT_PREFIX = 'voice-inputs/'
+S3_TRANSCRIPT_PREFIX = 'voice-transcripts/'
 
 # AWS client config
 aws_config = None
@@ -263,6 +270,123 @@ class S3FileManager:
         except Exception as e:
             logger.error(f"Error uploading text to S3: {e}")
             return False
+
+
+# ---------------------------------------------------------------------------
+# AWS Polly / Transcribe helpers
+# ---------------------------------------------------------------------------
+
+
+def _init_polly_client():
+    if not (AWS_AVAILABLE and aws_config is not None and POLLY_ENABLED):
+        return None
+    try:
+        return boto3.client('polly', region_name=AWS_REGION, config=aws_config)
+    except Exception as e:
+        logger.error(f"❌ Polly initialization error: {e}")
+        return None
+
+
+def _init_transcribe_client():
+    if not (AWS_AVAILABLE and aws_config is not None and TRANSCRIBE_ENABLED):
+        return None
+    try:
+        return boto3.client('transcribe', region_name=AWS_REGION, config=aws_config)
+    except Exception as e:
+        logger.error(f"❌ Transcribe initialization error: {e}")
+        return None
+
+
+polly_client = _init_polly_client()
+transcribe_client = _init_transcribe_client()
+
+
+def synthesize_speech(text: str, *, voice_id: str = "Joanna", output_format: str = "mp3"):
+    """Generate speech audio using Amazon Polly."""
+    if not polly_client:
+        return None, "Polly client not available"
+    try:
+        response = polly_client.synthesize_speech(
+            Text=text,
+            OutputFormat=output_format,
+            VoiceId=voice_id,
+            Engine="neural"
+        )
+        audio_stream = response.get("AudioStream")
+        if not audio_stream:
+            return None, "No audio stream returned from Polly"
+        audio_bytes = audio_stream.read()
+        return audio_bytes, None
+    except Exception as e:
+        logger.error(f"❌ Polly synthesis error: {e}")
+        return None, f"Polly synthesis error: {str(e)}"
+
+
+def transcribe_audio_from_s3(
+    s3_key: str,
+    *,
+    media_format: str,
+    language_code: str = "en-US",
+    timeout_seconds: int = 45,
+):
+    """Transcribe an audio file stored in S3 using Amazon Transcribe."""
+    if not transcribe_client:
+        return None, "Transcribe client not available"
+
+    job_name = f"voice-chat-{uuid.uuid4()}"
+    output_key = f"{S3_TRANSCRIPT_PREFIX}{job_name}.json"
+    media_uri = f"s3://{S3_BUCKET_NAME}/{s3_key}"
+
+    try:
+        transcribe_client.start_transcription_job(
+            TranscriptionJobName=job_name,
+            LanguageCode=language_code,
+            MediaFormat=media_format,
+            Media={"MediaFileUri": media_uri},
+            OutputBucketName=S3_BUCKET_NAME,
+            OutputKey=output_key,
+            Settings={
+                "ShowSpeakerLabels": False,
+                "ChannelIdentification": False
+            },
+        )
+    except Exception as e:
+        logger.error(f"❌ Transcribe start job error: {e}")
+        return None, f"Transcribe start job error: {str(e)}"
+
+    start_time = time.time()
+    status = "IN_PROGRESS"
+    while status == "IN_PROGRESS":
+        if time.time() - start_time > timeout_seconds:
+            return None, "Transcription timed out"
+        time.sleep(1.5)
+        try:
+            job = transcribe_client.get_transcription_job(
+                TranscriptionJobName=job_name
+            )
+            status = job["TranscriptionJob"]["TranscriptionJobStatus"]
+            if status == "FAILED":
+                failure_reason = job["TranscriptionJob"].get("FailureReason", "Unknown error")
+                return None, f"Transcription failed: {failure_reason}"
+        except Exception as e:
+            logger.error(f"❌ Transcribe poll error: {e}")
+            return None, f"Transcribe polling error: {str(e)}"
+
+    transcript_content, read_error = s3_manager.read_file_from_s3(output_key)
+    if read_error or not transcript_content:
+        return None, read_error or "Transcript file missing"
+
+    try:
+        payload = json.loads(transcript_content.decode("utf-8"))
+        transcripts = payload.get("results", {}).get("transcripts", [])
+        transcript_text = transcripts[0].get("transcript", "") if transcripts else ""
+    except Exception as e:
+        logger.error(f"❌ Error parsing transcript JSON: {e}")
+        return None, f"Transcript parse error: {str(e)}"
+    finally:
+        s3_manager.delete_file(output_key)
+
+    return transcript_text.strip(), None
 
 
 # ---------------------------------------------------------------------------

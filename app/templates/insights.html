@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Academy | Executive Insights</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f4f5fb;
+            color: #1f2933;
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 0.85rem;
+        }
+
+        .nav-links span {
+            margin-right: 0.5rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.06);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        main {
+            max-width: 1400px;
+            margin: 1.8rem auto 3rem;
+            padding: 0 1.5rem;
+        }
+
+        .headline {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .headline h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+        }
+
+        .headline p {
+            color: #64748b;
+            max-width: 640px;
+            margin-top: 0.4rem;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .kpi-card h3 {
+            font-size: 0.95rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-card span {
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .panel {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 1.2rem 1.4rem 1.6rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 25px rgba(15, 23, 42, 0.06);
+        }
+
+        .panel h2 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            min-height: 260px;
+        }
+
+        .export-card {
+            margin-top: 2rem;
+            background: #0f172a;
+            color: #ffffff;
+            border-radius: 18px;
+            padding: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 1rem;
+        }
+
+        .export-card h3 {
+            grid-column: 1 / -1;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .export-card label {
+            font-size: 0.82rem;
+            margin-bottom: 0.4rem;
+            display: block;
+            color: #cbd5f5;
+        }
+
+        .export-card input {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            border-radius: 10px;
+            border: none;
+        }
+
+        .export-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .export-actions button {
+            padding: 0.55rem 1.4rem;
+            border-radius: 999px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            background: #38bdf8;
+            color: #0f172a;
+        }
+
+        .export-actions button.secondary {
+            background: #a78bfa;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="top-bar-inner">
+            <div>
+                <strong>AI Academy Executive Insights</strong>
+            </div>
+            <div class="nav-links">
+                <span>{{ username }}</span>
+                <a href="/admin">📊 Dashboard</a>
+                <a href="/admin/chat">💬 Data Chat</a>
+                <a href="/admin/upload">📤 Upload</a>
+                <a href="/">🏠 Home</a>
+                <a href="/admin/logout">🚪 Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <main>
+        <div class="headline">
+            <div>
+                <h1>Executive-Grade Analytics</h1>
+                <p>Monitor high-impact learning KPIs, top issuer momentum, and completion trends for advanced associates.</p>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <h3>Total Employees</h3>
+                <span>{{ stats.total_employees }}</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Total Records</h3>
+                <span>{{ stats.all_records }}</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Completed Journey</h3>
+                <span>{{ stats.completed_journey }}</span>
+            </div>
+            <div class="kpi-card">
+                <h3>In Progress</h3>
+                <span>{{ stats.in_progress }}</span>
+            </div>
+        </div>
+
+        <div class="section-grid">
+            <div class="panel">
+                <h2>Level Distribution</h2>
+                <div class="chart-wrapper">
+                    <canvas id="levelChart"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Top Issuers</h2>
+                <div class="chart-wrapper">
+                    <canvas id="issuerChart"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Top Skills</h2>
+                <div class="chart-wrapper">
+                    <canvas id="skillChart"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Qualification Mix</h2>
+                <div class="chart-wrapper">
+                    <canvas id="qualifierChart"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Completion Trend</h2>
+                <div class="chart-wrapper">
+                    <canvas id="completionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="export-card">
+            <h3>Export Executive Reports</h3>
+            <div>
+                <label for="levelFilter">Level</label>
+                <input id="levelFilter" placeholder="Level 2">
+            </div>
+            <div>
+                <label for="issuerFilter">Issuer</label>
+                <input id="issuerFilter" placeholder="Microsoft">
+            </div>
+            <div>
+                <label for="qualifierFilter">Qualifier</label>
+                <input id="qualifierFilter" placeholder="Certified">
+            </div>
+            <div>
+                <label for="skillFilter">Skill</label>
+                <input id="skillFilter" placeholder="Generative AI">
+            </div>
+            <div>
+                <label for="assessmentFilter">Assessment Name</label>
+                <input id="assessmentFilter" placeholder="Certification Name">
+            </div>
+            <div>
+                <label for="startDate">Start Date</label>
+                <input id="startDate" type="date">
+            </div>
+            <div>
+                <label for="endDate">End Date</label>
+                <input id="endDate" type="date">
+            </div>
+            <div class="export-actions">
+                <button onclick="downloadExport('xlsx')">⬇️ Download Excel</button>
+                <button class="secondary" onclick="downloadExport('pptx')">📊 Download PPTX</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const insights = {{ insights | tojson }};
+
+        function buildChart(ctx, type, labels, data, color) {
+            return new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '',
+                        data: data,
+                        backgroundColor: color,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#475569' } },
+                        y: { ticks: { color: '#475569' } }
+                    }
+                }
+            });
+        }
+
+        buildChart(
+            document.getElementById('levelChart'),
+            'bar',
+            insights.level_labels,
+            insights.level_values,
+            '#38bdf8'
+        );
+        buildChart(
+            document.getElementById('issuerChart'),
+            'bar',
+            insights.issuer_labels,
+            insights.issuer_values,
+            '#a78bfa'
+        );
+        buildChart(
+            document.getElementById('skillChart'),
+            'bar',
+            insights.skill_labels,
+            insights.skill_values,
+            '#f472b6'
+        );
+        buildChart(
+            document.getElementById('qualifierChart'),
+            'doughnut',
+            insights.qualifier_labels,
+            insights.qualifier_values,
+            ['#34d399', '#f97316', '#facc15', '#60a5fa', '#a78bfa', '#fb7185']
+        );
+
+        buildChart(
+            document.getElementById('completionChart'),
+            'line',
+            insights.completion_months,
+            insights.completion_values,
+            '#22c55e'
+        );
+
+        function downloadExport(format) {
+            const params = new URLSearchParams({
+                format: format,
+                level: document.getElementById('levelFilter').value,
+                issuer: document.getElementById('issuerFilter').value,
+                qualifier: document.getElementById('qualifierFilter').value,
+                skill: document.getElementById('skillFilter').value,
+                assessment_name: document.getElementById('assessmentFilter').value,
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value
+            });
+            window.location.href = `/admin/exports?${params.toString()}`;
+        }
+    </script>
+</body>
+</html>

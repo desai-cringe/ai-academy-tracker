@@ -7,23 +7,33 @@ import os
 import tempfile
 from io import BytesIO
 import time
+import uuid
 
 import pandas as pd
 from flask import (
     render_template, request, jsonify, session, redirect,
-    url_for, flash
+    url_for, flash, send_file
 )
 from functools import wraps
 from datetime import datetime
 from sqlalchemy import func
+from werkzeug.utils import secure_filename
+from dateutil import parser as date_parser
 
 from .extensions import db
 from .models import EmployeeRecord
-from .aws_utils import s3_manager, call_bedrock_with_context
+from .aws_utils import (
+    s3_manager,
+    call_bedrock_with_context,
+    synthesize_speech,
+    transcribe_audio_from_s3,
+    S3_VOICE_INPUT_PREFIX,
+)
 from .services import (
     read_employee_data_sample_from_rds,
     get_employee_stats_cached,
     get_chart_data_from_rds,
+    get_advanced_insights_data,
     write_employee_data_to_s3,
     backup_current_data_in_s3,
     clean_employee_dataframe_chunked,
@@ -43,6 +53,7 @@ from .services import (
     filter_new_records_for_append,
     export_rds_to_csv_snapshot,
     _deduplicate_cleaned_dataframe,
+    CSV_EXPORT_COLUMNS,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +92,178 @@ def register_admin_routes(app):
                 return redirect(url_for('admin_login'))
             return f(*args, **kwargs)
         return decorated_function
+
+    def _normalize_export_filters(source: dict) -> dict:
+        filters = {
+            "level": source.get("level", "").strip(),
+            "issuer": source.get("issuer", "").strip(),
+            "qualifier": source.get("qualifier", "").strip(),
+            "skill": source.get("skill", "").strip(),
+            "assessment_name": source.get("assessment_name", "").strip(),
+            "employee_id": source.get("employee_id", "").strip(),
+            "wipro_function": source.get("wipro_function", "").strip(),
+            "start_date": source.get("start_date", "").strip(),
+            "end_date": source.get("end_date", "").strip(),
+        }
+        return {key: value for key, value in filters.items() if value}
+
+    def _apply_export_filters(query, filters: dict):
+        if filters.get("level"):
+            query = query.filter(EmployeeRecord.level.ilike(f"%{filters['level']}%"))
+        if filters.get("issuer"):
+            query = query.filter(EmployeeRecord.issuer == filters["issuer"])
+        if filters.get("qualifier"):
+            query = query.filter(EmployeeRecord.qualifier.ilike(f"%{filters['qualifier']}%"))
+        if filters.get("skill"):
+            query = query.filter(EmployeeRecord.skill.ilike(f"%{filters['skill']}%"))
+        if filters.get("assessment_name"):
+            query = query.filter(EmployeeRecord.assessment_name.ilike(f"%{filters['assessment_name']}%"))
+        if filters.get("employee_id"):
+            query = query.filter(EmployeeRecord.employee_id == filters["employee_id"])
+        if filters.get("wipro_function"):
+            query = query.filter(EmployeeRecord.wipro_function.ilike(f"%{filters['wipro_function']}%"))
+        return query
+
+    def _filter_records_by_date(records, filters: dict):
+        start_date = filters.get("start_date")
+        end_date = filters.get("end_date")
+        if not start_date and not end_date:
+            return records
+
+        filtered = []
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+
+        for record in records:
+            if not record.final_completion_date:
+                continue
+            try:
+                record_date = date_parser.parse(record.final_completion_date)
+            except Exception:
+                continue
+
+            if start_dt and record_date < start_dt:
+                continue
+            if end_dt and record_date > end_dt:
+                continue
+            filtered.append(record)
+        return filtered
+
+    def _records_to_export_rows(records):
+        rows = []
+        for record in records:
+            row = {
+                label: getattr(record, column, "") or ""
+                for column, label in CSV_EXPORT_COLUMNS
+            }
+            rows.append(row)
+        return rows
+
+    def _build_pptx_report(records, filters: dict):
+        from pptx import Presentation
+        from pptx.chart.data import ChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.util import Inches, Pt
+
+        prs = Presentation()
+        title_slide_layout = prs.slide_layouts[0]
+        title_slide = prs.slides.add_slide(title_slide_layout)
+        title_slide.shapes.title.text = "AI Academy Advanced Insights"
+        subtitle = title_slide.placeholders[1]
+        filter_lines = [f"{key.replace('_', ' ').title()}: {value}" for key, value in filters.items()]
+        subtitle.text = "Filters applied:\n" + ("\n".join(filter_lines) if filter_lines else "All records")
+
+        # KPI slide
+        kpi_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        kpi_slide.shapes.title.text = "KPI Summary"
+        total_records = len(records)
+        unique_employees = len({rec.employee_id for rec in records if rec.employee_id})
+        level_2_plus = sum(
+            1 for rec in records
+            if rec.level and ("Level 2" in rec.level or "Level 3" in rec.level)
+        )
+        kpi_box = kpi_slide.shapes.add_textbox(Inches(0.7), Inches(1.5), Inches(8.5), Inches(3))
+        text_frame = kpi_box.text_frame
+        text_frame.word_wrap = True
+        text_frame.text = f"Total Records: {total_records}"
+        for line in [
+            f"Unique Employees: {unique_employees}",
+            f"Level 2+ Achievers: {level_2_plus}",
+        ]:
+            p = text_frame.add_paragraph()
+            p.text = line
+            p.font.size = Pt(18)
+
+        # Level distribution chart
+        level_counts = {}
+        for rec in records:
+            level = (rec.level or "Unknown").strip()
+            level_counts[level] = level_counts.get(level, 0) + 1
+        chart_data = ChartData()
+        chart_data.categories = list(level_counts.keys()) or ["No Data"]
+        chart_data.add_series("Level Distribution", list(level_counts.values()) or [0])
+        chart_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        chart_slide.shapes.title.text = "Level Distribution"
+        chart_slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED,
+            Inches(0.8),
+            Inches(1.6),
+            Inches(8.6),
+            Inches(4.5),
+            chart_data,
+        )
+
+        # Issuer distribution chart
+        issuer_counts = {}
+        for rec in records:
+            issuer = (rec.issuer or "Unknown").strip()
+            issuer_counts[issuer] = issuer_counts.get(issuer, 0) + 1
+        issuer_chart_data = ChartData()
+        top_issuers = sorted(issuer_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        issuer_chart_data.categories = [item[0] for item in top_issuers] or ["No Data"]
+        issuer_chart_data.add_series("Issuer Distribution", [item[1] for item in top_issuers] or [0])
+        issuer_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        issuer_slide.shapes.title.text = "Top Issuers"
+        issuer_slide.shapes.add_chart(
+            XL_CHART_TYPE.BAR_CLUSTERED,
+            Inches(0.8),
+            Inches(1.6),
+            Inches(8.6),
+            Inches(4.5),
+            issuer_chart_data,
+        )
+
+        output = BytesIO()
+        prs.save(output)
+        output.seek(0)
+        return output
+
+    def _extract_export_filters_from_message(message: str) -> dict:
+        filters = {}
+        level_match = re.search(r"level\s*(\d+)", message, re.IGNORECASE)
+        if level_match:
+            filters["level"] = f"Level {level_match.group(1)}"
+
+        if "certified" in message.lower():
+            filters["qualifier"] = "Certified"
+        elif "trained" in message.lower():
+            filters["qualifier"] = "Trained"
+
+        issuer_candidates = db.session.query(func.distinct(EmployeeRecord.issuer)).filter(
+            EmployeeRecord.issuer.isnot(None),
+            EmployeeRecord.issuer != ''
+        ).all()
+        issuers = sorted(
+            [issuer[0] for issuer in issuer_candidates if issuer[0]],
+            key=len,
+            reverse=True
+        )
+        for issuer in issuers:
+            if issuer.lower() in message.lower():
+                filters["issuer"] = issuer
+                break
+
+        return filters
 
     # --- Auth routes --- #
 
@@ -182,6 +365,23 @@ def register_admin_routes(app):
             logger.error(f"❌ Chat page error: {e}")
             return f"Chat page error: {str(e)}", 500
 
+    @app.route('/admin/insights')
+    @login_required
+    def admin_insights():
+        """Advanced insights page for executive dashboards."""
+        try:
+            stats = get_employee_stats_cached()
+            insights = get_advanced_insights_data()
+            return render_template(
+                'insights.html',
+                username=session.get('username'),
+                stats=stats,
+                insights=insights
+            )
+        except Exception as e:
+            logger.error(f"❌ Insights page error: {e}")
+            return f"Insights page error: {str(e)}", 500
+
     # --- Chat API --- #
 
     @app.route('/admin/chat-api', methods=['POST'])
@@ -230,20 +430,91 @@ Instructions:
 - Use the statistical data above for general queries about levels, issuers, distributions
 - Use the specific employee data (if provided) for individual employee queries
 - If asked about a specific employee not in the data, say you need to query the database
-- Provide accurate, helpful answers based on the data provided
+- Provide production-grade analysis with bullet points, KPIs, and next-step insights
+- When a user mentions exporting, summarize the filters you interpreted from their request
 
 Answer the user's question below."""
 
             response_text = call_bedrock_with_context(user_message, system_prompt)
+
+            export_requested = bool(
+                re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", user_message, re.IGNORECASE)
+            )
+            export_filters = _extract_export_filters_from_message(user_message) if export_requested else {}
             return jsonify({
                 "success": True,
                 "response": response_text,
                 # Updated to reflect the AWS-native model
-                "model_used": "Amazon Nova Pro (Bedrock)"
+                "model_used": "Amazon Nova Pro (Bedrock)",
+                "export_ready": export_requested,
+                "export_filters": export_filters
             })
         except Exception as e:
             logger.error(f"Chat API error: {e}")
             return jsonify({"success": False, "error": str(e)})
+
+    # --- Voice chat endpoints --- #
+
+    @app.route('/admin/voice/transcribe', methods=['POST'])
+    @login_required
+    def voice_transcribe():
+        """Transcribe a voice prompt using Amazon Transcribe."""
+        try:
+            audio_file = request.files.get('audio')
+            if not audio_file:
+                return jsonify({"success": False, "error": "No audio file uploaded"}), 400
+
+            filename = secure_filename(audio_file.filename or "voice.webm")
+            extension = filename.rsplit('.', 1)[-1].lower()
+            if extension not in {'webm', 'ogg', 'wav', 'mp3', 'mp4', 'flac'}:
+                return jsonify({"success": False, "error": "Unsupported audio format"}), 400
+
+            s3_key = f"{S3_VOICE_INPUT_PREFIX}{uuid.uuid4()}.{extension}"
+            audio_bytes = audio_file.read()
+            success, error = s3_manager.write_file_to_s3(
+                s3_key,
+                audio_bytes,
+                content_type=audio_file.mimetype or "audio/webm"
+            )
+            if not success:
+                return jsonify({"success": False, "error": error or "Failed to store audio"}), 500
+
+            transcript, error = transcribe_audio_from_s3(
+                s3_key,
+                media_format=extension
+            )
+            s3_manager.delete_file(s3_key)
+            if error:
+                return jsonify({"success": False, "error": error}), 500
+
+            return jsonify({"success": True, "transcript": transcript})
+        except Exception as e:
+            logger.error(f"Voice transcription error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route('/admin/voice/synthesize', methods=['POST'])
+    @login_required
+    def voice_synthesize():
+        """Synthesize a response using Amazon Polly."""
+        try:
+            data = request.get_json()
+            text = data.get("text", "").strip() if data else ""
+            if not text:
+                return jsonify({"success": False, "error": "Text is required"}), 400
+
+            audio_bytes, error = synthesize_speech(text)
+            if error or not audio_bytes:
+                return jsonify({"success": False, "error": error or "Polly error"}), 500
+
+            return send_file(
+                BytesIO(audio_bytes),
+                mimetype="audio/mpeg",
+                as_attachment=False,
+                download_name="response.mp3"
+            )
+        except Exception as e:
+            logger.error(f"Voice synthesis error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
     # --- Change password (placeholder) --- #
 
@@ -1061,3 +1332,44 @@ Answer the user's question below."""
         except Exception as e:
             logger.error(f"Certification data error: {e}")
             return jsonify({"error": str(e)})
+
+    @app.route('/admin/exports', methods=['GET'])
+    @login_required
+    def export_filtered_records():
+        """Export filtered employee records as XLSX or PPTX."""
+        try:
+            export_format = request.args.get('format', 'xlsx').lower()
+            filters = _normalize_export_filters(request.args)
+            query = _apply_export_filters(db.session.query(EmployeeRecord), filters)
+            records = query.all()
+            records = _filter_records_by_date(records, filters)
+
+            if not records:
+                return jsonify({"success": False, "error": "No records found for the selected filters"}), 404
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            if export_format == 'pptx':
+                pptx_stream = _build_pptx_report(records, filters)
+                filename = f"ai_academy_insights_{timestamp}.pptx"
+                return send_file(
+                    pptx_stream,
+                    mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    as_attachment=True,
+                    download_name=filename
+                )
+
+            export_rows = _records_to_export_rows(records)
+            df = pd.DataFrame(export_rows)
+            output = BytesIO()
+            df.to_excel(output, index=False)
+            output.seek(0)
+            filename = f"ai_academy_export_{timestamp}.xlsx"
+            return send_file(
+                output,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                as_attachment=True,
+                download_name=filename
+            )
+        except Exception as e:
+            logger.error(f"❌ Export error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500

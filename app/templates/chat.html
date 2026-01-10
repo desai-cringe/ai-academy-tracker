@@ -382,6 +382,55 @@
             cursor: not-allowed;
             transform: none;
         }
+
+        .chat-voice-btn {
+            background: rgba(102, 126, 234, 0.15);
+            color: #4c51bf;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 0.8rem 1rem;
+            border-radius: 18px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .chat-voice-btn.recording {
+            background: rgba(248, 113, 113, 0.2);
+            color: #b91c1c;
+            border-color: rgba(248, 113, 113, 0.5);
+            box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.15);
+        }
+
+        .export-actions {
+            margin-top: 0.75rem;
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .export-actions a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #4c51bf;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(102, 126, 234, 0.08);
+        }
+
+        .voice-play-btn {
+            margin-left: 0.6rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            color: #4c51bf;
+            font-size: 1rem;
+        }
         
         .welcome-message {
             text-align: center;
@@ -438,6 +487,7 @@
             <div class="nav-links">
                 <span>{{ username }}</span>
                 <a href="/admin">📊 Dashboard</a>
+                <a href="/admin/insights">📈 Insights</a>
                 <a href="/admin/upload">📤 Upload</a>
                 <a href="/">🏠 Home</a>
                 <a href="/admin/logout">🚪 Logout</a>
@@ -449,7 +499,7 @@
         <div class="chat-container">
             <div class="chat-header">
                 <h2>✨ Chat with Your Data</h2>
-                <p>Ask questions about your employee learning data powered by Amazon Nova Pro (Bedrock)</p>
+                <p>Ask questions about your employee learning data powered by Amazon Nova Pro (Bedrock), with voice + export support</p>
             </div>
             
             <div class="chat-messages" id="chat-messages">
@@ -458,6 +508,8 @@
                     <p>I'm powered by Amazon Nova Pro (Bedrock) and have access to your current employee learning data. Ask me anything about:</p>
                     <br>
                     <p>• Employee progress and completions • Level distributions • Issuer-specific analytics • Learning trends and statistics</p>
+                    <br>
+                    <p>🎙️ You can ask by voice and play responses aloud, and when you request exports I can provide Excel or PPTX downloads.</p>
                 </div>
             </div>
             
@@ -495,6 +547,9 @@
                         rows="2"
                         maxlength="500"
                     ></textarea>
+                    <button type="button" class="chat-voice-btn" id="chat-voice-btn" title="Voice input">
+                        🎙️
+                    </button>
                     <button type="submit" class="chat-send-btn" id="chat-send-btn">
                         🚀
                     </button>
@@ -504,33 +559,50 @@
     </div>
     
     <script>
+        const audioCache = new Map();
+
         function fillExample(text) {
             document.getElementById('chat-input').value = text;
             document.getElementById('chat-input').focus();
         }
-        
-        function addMessage(content, isUser = false, timestamp = null, modelUsed = null, isError = false) {
+
+        function buildExportActions(filters) {
+            if (filters === null) {
+                return '';
+            }
+            const params = new URLSearchParams(filters || {});
+            return `
+                <div class="export-actions">
+                    <a href="/admin/exports?format=xlsx&${params.toString()}" target="_blank">⬇️ Excel</a>
+                    <a href="/admin/exports?format=pptx&${params.toString()}" target="_blank">📊 PPTX</a>
+                </div>
+            `;
+        }
+
+        function addMessage(content, isUser = false, timestamp = null, modelUsed = null, isError = false, exportFilters = null) {
             const messagesContainer = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
-            
+
             let messageClass = `message ${isUser ? 'user' : 'bot'}`;
             if (isError) {
                 messageClass += ' error-message';
             }
             messageDiv.className = messageClass;
-            
+
             const now = timestamp || new Date();
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
+            const timeString = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
             });
-            
+
             let metaContent = `<span>${timeString}</span>`;
             if (modelUsed && !isUser) {
                 metaContent += `<span class="model-indicator">${modelUsed}</span>`;
             }
-            
-            // Format content with basic markdown-like formatting
+            if (!isUser && !isError) {
+                metaContent += `<button class="voice-play-btn" data-voice-text="${encodeURIComponent(content)}">🔊</button>`;
+            }
+
             let formattedContent = content;
             if (!isUser) {
                 formattedContent = content
@@ -538,26 +610,27 @@
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
                     .replace(/\n/g, '<br>');
             }
-            
+
             messageDiv.innerHTML = `
                 <div class="message-content">${formattedContent}</div>
+                ${buildExportActions(exportFilters)}
                 <div class="message-meta">${metaContent}</div>
             `;
-            
+
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
-        
+
         function showTyping() {
             document.getElementById('chat-typing').style.display = 'flex';
             const messagesContainer = document.getElementById('chat-messages');
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
-        
+
         function hideTyping() {
             document.getElementById('chat-typing').style.display = 'none';
         }
-        
+
         async function sendMessage(message) {
             try {
                 const response = await fetch('/admin/chat-api', {
@@ -567,68 +640,166 @@
                     },
                     body: JSON.stringify({ message: message })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    // Default model name updated to Amazon Nova Pro (Bedrock)
-                    addMessage(data.response, false, null, data.model_used || 'Amazon Nova Pro (Bedrock)');
+                    addMessage(
+                        data.response,
+                        false,
+                        null,
+                        data.model_used || 'Amazon Nova Pro (Bedrock)',
+                        false,
+                        data.export_ready ? (data.export_filters || {}) : null
+                    );
                 } else {
-                    addMessage(data.error || 'Sorry, I encountered an error processing your request.', false, null, 'Error', true);
+                    addMessage(
+                        data.error || 'Sorry, I encountered an error processing your request.',
+                        false,
+                        null,
+                        'Error',
+                        true
+                    );
                 }
             } catch (error) {
                 addMessage('Connection error. Please check your internet connection and try again.', false, null, 'Error', true);
                 console.error('Chat error:', error);
             }
         }
-        
-        // Chat form handler
-        document.getElementById('chat-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
+
+        async function handleUserMessage(message) {
             const input = document.getElementById('chat-input');
             const sendBtn = document.getElementById('chat-send-btn');
-            const message = input.value.trim();
-            
+
             if (!message) return;
-            
-            // Add user message
+
             addMessage(message, true);
-            
-            // Clear input and disable send button
             input.value = '';
             sendBtn.disabled = true;
-            
-            // Show typing indicator
             showTyping();
-            
-            // Send message to backend
             await sendMessage(message);
-            
-            // Hide typing and re-enable send button
             hideTyping();
             sendBtn.disabled = false;
             input.focus();
+        }
+
+        async function playVoiceResponse(text, button) {
+            const decodedText = decodeURIComponent(text);
+            if (audioCache.has(decodedText)) {
+                audioCache.get(decodedText).play();
+                return;
+            }
+            button.disabled = true;
+            try {
+                const response = await fetch('/admin/voice/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: decodedText })
+                });
+                if (!response.ok) {
+                    throw new Error('Unable to synthesize speech');
+                }
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                const audio = new Audio(audioUrl);
+                audioCache.set(decodedText, audio);
+                audio.play();
+            } catch (error) {
+                console.error('Voice synthesis error:', error);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function sendVoiceBlob(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'voice.webm');
+            showTyping();
+            try {
+                const response = await fetch('/admin/voice/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success && data.transcript) {
+                    hideTyping();
+                    await handleUserMessage(data.transcript);
+                } else {
+                    addMessage(data.error || 'Voice transcription failed.', false, null, 'Error', true);
+                    hideTyping();
+                }
+            } catch (error) {
+                addMessage('Voice transcription failed. Please try again.', false, null, 'Error', true);
+                hideTyping();
+            }
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = document.getElementById('chat-input').value.trim();
+            await handleUserMessage(message);
         });
-        
-        // Auto-resize textarea
+
         document.getElementById('chat-input').addEventListener('input', function() {
             const sendBtn = document.getElementById('chat-send-btn');
             sendBtn.disabled = this.value.trim() === '';
-            
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
-        
-        // Enter to send (Shift+Enter for new line)
+
         document.getElementById('chat-input').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 document.getElementById('chat-form').dispatchEvent(new Event('submit'));
             }
         });
-        
-        // Initialize
+
+        document.getElementById('chat-messages').addEventListener('click', function(e) {
+            if (e.target.classList.contains('voice-play-btn')) {
+                const text = e.target.getAttribute('data-voice-text');
+                playVoiceResponse(text, e.target);
+            }
+        });
+
+        document.getElementById('chat-voice-btn').addEventListener('click', async function() {
+            const voiceButton = this;
+            if (voiceButton.dataset.recording === 'true') {
+                voiceButton.dataset.recording = 'false';
+                voiceButton.classList.remove('recording');
+                if (voiceButton._recorder) {
+                    voiceButton._recorder.stop();
+                }
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                voiceButton.dataset.recording = 'true';
+                voiceButton.classList.add('recording');
+                voiceButton._recorder = recorder;
+                const chunks = [];
+
+                recorder.addEventListener('dataavailable', (event) => {
+                    if (event.data.size > 0) {
+                        chunks.push(event.data);
+                    }
+                });
+
+                recorder.addEventListener('stop', () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    sendVoiceBlob(blob);
+                });
+
+                recorder.start();
+            } catch (error) {
+                addMessage('Microphone access was denied.', false, null, 'Error', true);
+                voiceButton.dataset.recording = 'false';
+                voiceButton.classList.remove('recording');
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('chat-input').focus();
         });
