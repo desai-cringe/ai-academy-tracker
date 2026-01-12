@@ -169,6 +169,8 @@
             display: flex;
             flex-direction: column;
             animation: fadeInUp 1s ease;
+            position: relative;
+            z-index: 2;
         }
         
         @keyframes fadeInUp {
@@ -270,11 +272,13 @@
         .chat-messages {
             flex: 1;
             padding: 2rem;
+            padding-bottom: 5.5rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
-            background: linear-gradient(135deg, rgba(247, 250, 252, 0.3), rgba(255, 255, 255, 0.1));
+            background: linear-gradient(135deg, rgba(247, 250, 252, 0.85), rgba(255, 255, 255, 0.6));
+            scroll-padding-bottom: 6rem;
         }
         
         .message {
@@ -286,6 +290,12 @@
             animation: messageSlide 0.4s ease;
             box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             position: relative;
+            z-index: 1;
+        }
+
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
         }
         
         @keyframes messageSlide {
@@ -302,11 +312,13 @@
         }
         
         .message.bot {
-            background: linear-gradient(135deg, #ffffff, #f8f9fa);
-            color: #333;
+            background: linear-gradient(135deg, #ffffff, #f3f4ff);
+            color: #1f2937;
             align-self: flex-start;
             border-bottom-left-radius: 8px;
-            border: 1px solid rgba(102, 126, 234, 0.15);
+            border: 1px solid rgba(76, 29, 149, 0.2);
+            border-left: 4px solid rgba(76, 29, 149, 0.5);
+            box-shadow: 0 10px 28px rgba(76, 29, 149, 0.12);
         }
         
         .message.bot::before {
@@ -332,13 +344,37 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
         }
-        
+
         .model-indicator {
             background: rgba(0,0,0,0.1);
             padding: 0.25rem 0.75rem;
             border-radius: 15px;
             font-weight: 600;
+        }
+
+        .message-actions {
+            display: inline-flex;
+            gap: 0.5rem;
+        }
+
+        .message-action-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(102, 126, 234, 0.15);
+            color: #312e81;
+            transition: all 0.2s ease;
+        }
+
+        .message-action-btn:hover {
+            background: rgba(102, 126, 234, 0.25);
+            transform: translateY(-1px);
         }
         
         .error-message {
@@ -390,6 +426,44 @@
             border-top: 1px solid rgba(0,0,0,0.1);
             background: rgba(255,255,255,0.8);
             backdrop-filter: blur(15px);
+        }
+
+        .assistant-tools {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .tool-toggle-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .tool-toggle {
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            background: rgba(255,255,255,0.9);
+            color: #312e81;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-toggle.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 8px 18px rgba(102, 126, 234, 0.25);
+        }
+
+        .tool-hint {
+            font-size: 0.8rem;
+            color: #4b5563;
+            font-weight: 500;
         }
 
         .insight-highlights {
@@ -686,7 +760,7 @@
                     <br>
                     <p>• Employee progress • Issuer, certification, and skill performance • Level/qualifier distributions • Learning trends by function</p>
                     <br>
-                    <p>🎙️ You can ask by voice and play responses aloud. When you request exports I can provide Excel or PPTX downloads with filters.</p>
+                    <p>🎙️ You can ask by voice and play responses aloud. When you request exports I can provide Excel or PPTX downloads with filters. Ask for a PPT breakdown to get a slide-ready outline.</p>
                     <div class="badge-row">
                         <span class="welcome-badge">Executive summaries</span>
                         <span class="welcome-badge">Skill heatmaps</span>
@@ -705,6 +779,14 @@
             </div>
             
             <div class="chat-input-container">
+                <div class="assistant-tools">
+                    <div class="tool-toggle-group">
+                        <button type="button" class="tool-toggle" data-tool="ppt-breakdown">📊 PPT breakdown mode</button>
+                        <button type="button" class="tool-toggle" data-tool="exec-summary">🧭 Executive summary</button>
+                        <button type="button" class="tool-toggle" data-tool="action-items">✅ Actionable next steps</button>
+                    </div>
+                    <div class="tool-hint" id="tool-hint">Toggle a mode to shape the response layout before sending your question.</div>
+                </div>
                 <div class="insight-highlights">
                     <div class="insight-card">
                         <span>Issuer Lens</span>
@@ -721,6 +803,10 @@
                     <div class="insight-card">
                         <span>Executive Summary</span>
                         KPIs, trends, risks, and recommended actions.
+                    </div>
+                    <div class="insight-card">
+                        <span>PPT Breakdown</span>
+                        Full-record slides with issuer, function, and skill views.
                     </div>
                 </div>
                 <!-- Example Queries -->
@@ -742,6 +828,9 @@
                     </div>
                     <div class="example-query" onclick="fillExample('Show certification status for Azure Data certifications')">
                         Certification status?
+                    </div>
+                    <div class="example-query" onclick="fillExample('Create a whole records breakdown in PPT')">
+                        PPT breakdown
                     </div>
                 </div>
                 
@@ -770,6 +859,23 @@
     <script>
         const audioCache = new Map();
         let welcomeMessageTemplate = '';
+        const activeTools = new Set();
+
+        const toolInstructions = {
+            'ppt-breakdown': 'Respond with a PPT-ready breakdown using clear slide titles and sections.',
+            'exec-summary': 'Provide a concise executive summary first, followed by key metrics and implications.',
+            'action-items': 'End with actionable next steps and owners where possible.'
+        };
+
+        const pptBreakdownInstruction = [
+            'For a whole records breakdown in PPT, respond with these sections:',
+            '1. Overall Statistics',
+            '2. Detailed Breakdown by Issuer',
+            '3. Distribution by Wipro Function',
+            '4. Detailed Breakdown by skill with respect to issuer',
+            '5. Quick Reference Matrix',
+            'Use clear headings and slide-ready bullets.'
+        ].join('\n');
 
         function fillExample(text) {
             document.getElementById('chat-input').value = text;
@@ -797,6 +903,36 @@
             `;
         }
 
+        function isPptBreakdownRequest(message) {
+            const normalized = message.toLowerCase();
+            return (
+                normalized.includes('whole records breakdown') ||
+                normalized.includes('breakdown in ppt') ||
+                (normalized.includes('ppt') && normalized.includes('breakdown')) ||
+                normalized.includes('pptx breakdown')
+            );
+        }
+
+        function buildGuidedMessage(message) {
+            const instructions = [];
+
+            activeTools.forEach((tool) => {
+                if (toolInstructions[tool]) {
+                    instructions.push(toolInstructions[tool]);
+                }
+            });
+
+            if (isPptBreakdownRequest(message)) {
+                instructions.push(pptBreakdownInstruction);
+            }
+
+            if (!instructions.length) {
+                return message;
+            }
+
+            return `${message}\n\n${instructions.join('\n')}`;
+        }
+
         function addMessage(content, isUser = false, timestamp = null, modelUsed = null, isError = false, exportFilters = null) {
             const messagesContainer = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
@@ -817,8 +953,14 @@
             if (modelUsed && !isUser) {
                 metaContent += `<span class="model-indicator">${modelUsed}</span>`;
             }
+            let actionButtons = '';
             if (!isUser && !isError) {
-                metaContent += `<button class="voice-play-btn" data-voice-text="${encodeURIComponent(content)}">🔊</button>`;
+                actionButtons = `
+                    <div class="message-actions">
+                        <button class="message-action-btn voice-play-btn" data-voice-text="${encodeURIComponent(content)}">🔊 Listen</button>
+                        <button class="message-action-btn message-copy-btn" data-copy-text="${encodeURIComponent(content)}">📋 Copy</button>
+                    </div>
+                `;
             }
 
             let formattedContent = content;
@@ -832,7 +974,7 @@
             messageDiv.innerHTML = `
                 <div class="message-content">${formattedContent}</div>
                 ${buildExportActions(exportFilters)}
-                <div class="message-meta">${metaContent}</div>
+                <div class="message-meta">${metaContent}${actionButtons}</div>
             `;
 
             messagesContainer.appendChild(messageDiv);
@@ -895,7 +1037,7 @@
             input.value = '';
             sendBtn.disabled = true;
             showTyping();
-            await sendMessage(message);
+            await sendMessage(buildGuidedMessage(message));
             hideTyping();
             sendBtn.disabled = false;
             input.focus();
@@ -1002,6 +1144,13 @@
             if (e.target.classList.contains('voice-play-btn')) {
                 const text = e.target.getAttribute('data-voice-text');
                 playVoiceResponse(text, e.target);
+                return;
+            }
+            if (e.target.classList.contains('message-copy-btn')) {
+                const text = decodeURIComponent(e.target.getAttribute('data-copy-text'));
+                navigator.clipboard.writeText(text)
+                    .then(() => setVoiceStatus('Response copied to clipboard.', 'success'))
+                    .catch(() => setVoiceStatus('Unable to copy response. Please try again.', 'error'));
             }
         });
 
@@ -1141,6 +1290,40 @@
 
             const clearBtn = document.getElementById('clear-chat-btn');
             const copyBtn = document.getElementById('copy-last-btn');
+            const toolButtons = document.querySelectorAll('.tool-toggle');
+            const toolHint = document.getElementById('tool-hint');
+
+            toolButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const tool = button.dataset.tool;
+                    if (activeTools.has(tool)) {
+                        activeTools.delete(tool);
+                        button.classList.remove('active');
+                    } else {
+                        activeTools.add(tool);
+                        button.classList.add('active');
+                    }
+
+                    if (!activeTools.size) {
+                        toolHint.textContent = 'Toggle a mode to shape the response layout before sending your question.';
+                        return;
+                    }
+
+                    const activeLabels = Array.from(activeTools).map((item) => {
+                        switch (item) {
+                            case 'ppt-breakdown':
+                                return 'PPT breakdown';
+                            case 'exec-summary':
+                                return 'Executive summary';
+                            case 'action-items':
+                                return 'Actionable steps';
+                            default:
+                                return item;
+                        }
+                    });
+                    toolHint.textContent = `Active mode(s): ${activeLabels.join(', ')}.`;
+                });
+            });
 
             clearBtn.addEventListener('click', () => {
                 const messagesContainer = document.getElementById('chat-messages');
