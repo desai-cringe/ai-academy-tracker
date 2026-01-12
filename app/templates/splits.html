@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Academy | Certification & Function Splits</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f3f5fb;
+            color: #1f2933;
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: linear-gradient(90deg, #111827, #1d4ed8, #7c3aed);
+            color: #ffffff;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.32);
+        }
+
+        .top-bar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 0.85rem;
+        }
+
+        .nav-links span {
+            margin-right: 0.5rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.06);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        main {
+            max-width: 1400px;
+            margin: 1.8rem auto 3rem;
+            padding: 0 1.5rem;
+        }
+
+        .headline {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .headline h1 {
+            font-size: 2rem;
+            font-weight: 800;
+        }
+
+        .headline p {
+            color: #64748b;
+            max-width: 640px;
+            margin-top: 0.5rem;
+        }
+
+        .issuer-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .issuer-chip {
+            border-radius: 999px;
+            border: 1px solid #c7d2fe;
+            background: #eef2ff;
+            color: #3730a3;
+            padding: 0.45rem 0.95rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .issuer-chip.active,
+        .issuer-chip:hover {
+            background: #4338ca;
+            color: #ffffff;
+            border-color: #4338ca;
+            box-shadow: 0 10px 18px rgba(67, 56, 202, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.8rem;
+        }
+
+        .kpi-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+        }
+
+        .kpi-card h3 {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 0.4rem;
+        }
+
+        .kpi-card span {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .grid-two {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .panel {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 1.3rem 1.4rem 1.6rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 25px rgba(15, 23, 42, 0.06);
+        }
+
+        .panel h2 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+        }
+
+        .split-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        select {
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid #cbd5f5;
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.6rem 0.4rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+        }
+
+        .matrix-table {
+            overflow-x: auto;
+        }
+
+        .empty-state {
+            padding: 1rem;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5f5;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="top-bar-inner">
+            <div>
+                <strong>AI Academy Tracker</strong>
+                <div style="font-size: 0.85rem; opacity: 0.85;">Certification & Function Split Studio</div>
+            </div>
+            <div class="nav-links">
+                <span>{{ username }}</span>
+                <a href="/admin">📊 Dashboard</a>
+                <a href="/admin/insights">📈 Insights</a>
+                <a href="/admin/chat">🤖 Chat</a>
+                <a href="/admin/upload">📤 Upload</a>
+                <a href="/">🏠 Home</a>
+                <a href="/admin/logout">🚪 Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <main>
+        <div class="headline">
+            <div>
+                <h1>Issuer Deep-Dive Explorer</h1>
+                <p>Click an issuer to see certification coverage, completion intensity by function, and cross-splits across key dimensions.</p>
+            </div>
+        </div>
+
+        <div class="issuer-list" id="issuer-list">
+            {% for issuer in issuers %}
+            <button class="issuer-chip" data-issuer="{{ issuer }}">{{ issuer }}</button>
+            {% endfor %}
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <h3>Total Records</h3>
+                <span id="kpi-records">0</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Unique Employees</h3>
+                <span id="kpi-employees">0</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Certifications</h3>
+                <span id="kpi-certs">0</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Functions Covered</h3>
+                <span id="kpi-functions">0</span>
+            </div>
+        </div>
+
+        <div class="grid-two">
+            <div class="panel">
+                <h2>Certification Coverage</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Certification</th>
+                            <th>Completions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cert-table">
+                        <tr><td colspan="2" class="empty-state">Select an issuer to load certifications.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="panel">
+                <div class="split-controls">
+                    <h2 style="margin: 0;">Split View</h2>
+                    <select id="split-select">
+                        <option value="wipro_function">Wipro Function</option>
+                        <option value="level">Level</option>
+                        <option value="qualifier">Qualifier</option>
+                        <option value="skill">Skill</option>
+                    </select>
+                </div>
+                <canvas id="split-chart" height="180"></canvas>
+            </div>
+        </div>
+
+        <div class="panel matrix-table">
+            <h2>Top Certifications by Function</h2>
+            <table id="matrix-table">
+                <thead id="matrix-head"></thead>
+                <tbody id="matrix-body"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const issuers = {{ issuers | tojson }};
+        let currentIssuer = issuers.length ? issuers[0] : null;
+        let splitChart = null;
+
+        function setActiveIssuer(issuer) {
+            currentIssuer = issuer;
+            document.querySelectorAll('.issuer-chip').forEach((chip) => {
+                chip.classList.toggle('active', chip.dataset.issuer === issuer);
+            });
+        }
+
+        function updateKpis(totals) {
+            document.getElementById('kpi-records').textContent = totals.records.toLocaleString();
+            document.getElementById('kpi-employees').textContent = totals.employees.toLocaleString();
+            document.getElementById('kpi-certs').textContent = totals.certifications.toLocaleString();
+            document.getElementById('kpi-functions').textContent = totals.functions.toLocaleString();
+        }
+
+        function updateCertifications(certifications) {
+            const tableBody = document.getElementById('cert-table');
+            tableBody.innerHTML = '';
+            if (!certifications.length) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="empty-state">No certification data found for this issuer.</td></tr>';
+                return;
+            }
+            certifications.forEach((cert) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${cert.name}</td><td>${cert.count}</td>`;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updateSplitChart(splitLabel, splitData) {
+            const labels = splitData.map(item => item.label);
+            const values = splitData.map(item => item.count);
+            const ctx = document.getElementById('split-chart').getContext('2d');
+            if (splitChart) {
+                splitChart.destroy();
+            }
+            splitChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${splitLabel} Completions`,
+                        data: values,
+                        backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                        borderColor: 'rgba(79, 70, 229, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function updateMatrix(matrix) {
+            const head = document.getElementById('matrix-head');
+            const body = document.getElementById('matrix-body');
+            head.innerHTML = '';
+            body.innerHTML = '';
+            if (!matrix.certifications.length || !matrix.functions.length) {
+                body.innerHTML = '<tr><td class="empty-state">No matrix data available.</td></tr>';
+                return;
+            }
+            const headRow = document.createElement('tr');
+            headRow.innerHTML = `<th>Certification</th>${matrix.functions.map(fn => `<th>${fn}</th>`).join('')}`;
+            head.appendChild(headRow);
+
+            matrix.certifications.forEach((cert) => {
+                const row = document.createElement('tr');
+                const functionCells = matrix.functions.map((fn) => {
+                    const value = matrix.data[cert]?.[fn] ?? 0;
+                    return `<td>${value}</td>`;
+                }).join('');
+                row.innerHTML = `<td>${cert}</td>${functionCells}`;
+                body.appendChild(row);
+            });
+        }
+
+        async function loadIssuerData() {
+            if (!currentIssuer) {
+                return;
+            }
+            const splitBy = document.getElementById('split-select').value;
+            const response = await fetch(`/admin/splits-data?issuer=${encodeURIComponent(currentIssuer)}&split_by=${encodeURIComponent(splitBy)}`);
+            const data = await response.json();
+            if (!data.success) {
+                return;
+            }
+            updateKpis(data.totals);
+            updateCertifications(data.certifications);
+            updateSplitChart(data.split_label, data.split_data);
+            updateMatrix(data.matrix);
+        }
+
+        document.getElementById('split-select').addEventListener('change', loadIssuerData);
+
+        document.querySelectorAll('.issuer-chip').forEach((chip) => {
+            chip.addEventListener('click', () => {
+                setActiveIssuer(chip.dataset.issuer);
+                loadIssuerData();
+            });
+        });
+
+        if (currentIssuer) {
+            setActiveIssuer(currentIssuer);
+            loadIssuerData();
+        }
+    </script>
+</body>
+</html>

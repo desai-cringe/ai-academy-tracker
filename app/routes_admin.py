@@ -424,6 +424,152 @@ def register_admin_routes(app):
             logger.error(f"❌ Insights page error: {e}")
             return f"Insights page error: {str(e)}", 500
 
+    @app.route('/admin/splits')
+    @login_required
+    def admin_splits():
+        """Issuer and certification split explorer."""
+        try:
+            issuers = [
+                row[0]
+                for row in db.session.query(EmployeeRecord.issuer)
+                .filter(EmployeeRecord.issuer.isnot(None), EmployeeRecord.issuer != '')
+                .distinct()
+                .order_by(EmployeeRecord.issuer)
+                .all()
+            ]
+            return render_template(
+                'splits.html',
+                username=session.get('username'),
+                issuers=issuers
+            )
+        except Exception as e:
+            logger.error(f"❌ Splits page error: {e}")
+            return f"Splits page error: {str(e)}", 500
+
+    @app.route('/admin/splits-data')
+    @login_required
+    def admin_splits_data():
+        """JSON data for issuer splits (certifications + function/level split)."""
+        issuer = request.args.get('issuer', '').strip()
+        split_by = request.args.get('split_by', 'wipro_function').strip()
+        if not issuer:
+            return jsonify({"success": False, "error": "Issuer is required."}), 400
+
+        split_columns = {
+            "wipro_function": ("Wipro Function", EmployeeRecord.wipro_function),
+            "level": ("Level", EmployeeRecord.level),
+            "qualifier": ("Qualifier", EmployeeRecord.qualifier),
+            "skill": ("Skill", EmployeeRecord.skill),
+        }
+        if split_by not in split_columns:
+            return jsonify({"success": False, "error": "Invalid split column."}), 400
+
+        split_label, split_column = split_columns[split_by]
+
+        total_records = db.session.query(func.count(EmployeeRecord.id)).filter(
+            EmployeeRecord.issuer == issuer
+        ).scalar() or 0
+        unique_employees = db.session.query(
+            func.count(func.distinct(EmployeeRecord.employee_id))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.employee_id.isnot(None),
+            EmployeeRecord.employee_id != ''
+        ).scalar() or 0
+
+        certifications = db.session.query(
+            EmployeeRecord.assessment_name,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.assessment_name.isnot(None),
+            EmployeeRecord.assessment_name != ''
+        ).group_by(
+            EmployeeRecord.assessment_name
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(25).all()
+
+        certification_data = [
+            {"name": name, "count": count}
+            for name, count in certifications
+        ]
+
+        split_rows = db.session.query(
+            split_column,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer
+        ).group_by(
+            split_column
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(12).all()
+
+        split_data = [
+            {"label": value or "Unknown", "count": count}
+            for value, count in split_rows
+        ]
+
+        top_certifications = [row[0] for row in certifications[:6]]
+        top_functions = [
+            row[0] or "Unknown"
+            for row in db.session.query(
+                EmployeeRecord.wipro_function,
+                func.count(EmployeeRecord.id)
+            ).filter(
+                EmployeeRecord.issuer == issuer
+            ).group_by(
+                EmployeeRecord.wipro_function
+            ).order_by(
+                func.count(EmployeeRecord.id).desc()
+            ).limit(6).all()
+        ]
+
+        matrix_rows = []
+        if top_certifications and top_functions:
+            matrix_rows = db.session.query(
+                EmployeeRecord.assessment_name,
+                EmployeeRecord.wipro_function,
+                func.count(EmployeeRecord.id)
+            ).filter(
+                EmployeeRecord.issuer == issuer,
+                EmployeeRecord.assessment_name.in_(top_certifications),
+                EmployeeRecord.wipro_function.in_(top_functions)
+            ).group_by(
+                EmployeeRecord.assessment_name,
+                EmployeeRecord.wipro_function
+            ).all()
+
+        matrix = {
+            cert: {function: 0 for function in top_functions}
+            for cert in top_certifications
+        }
+        for cert_name, function, count in matrix_rows:
+            function_key = function or "Unknown"
+            if cert_name in matrix and function_key in matrix[cert_name]:
+                matrix[cert_name][function_key] = count
+
+        return jsonify({
+            "success": True,
+            "issuer": issuer,
+            "totals": {
+                "records": total_records,
+                "employees": unique_employees,
+                "certifications": len(certification_data),
+                "functions": len({row["label"] for row in split_data}),
+            },
+            "certifications": certification_data,
+            "split_by": split_by,
+            "split_label": split_label,
+            "split_data": split_data,
+            "matrix": {
+                "certifications": top_certifications,
+                "functions": top_functions,
+                "data": matrix
+            }
+        })
+
     # --- Chat API --- #
 
     @app.route('/admin/chat-api', methods=['POST'])
