@@ -706,6 +706,14 @@ def create_knowledge_base_file(df_cleaned: pd.DataFrame) -> Optional[str]:
         for qual, count in df_cleaned['Qualifier'].value_counts().items():
             kb_content.append(f"  {qual}: {count} records")
         kb_content.append("")
+        kb_content.append("SKILL DISTRIBUTION:")
+        for skill, count in df_cleaned['Skill'].value_counts().head(15).items():
+            kb_content.append(f"  {skill}: {count} records")
+        kb_content.append("")
+        kb_content.append("CERTIFICATION DISTRIBUTION (ASSESSMENT NAME):")
+        for assessment, count in df_cleaned['Assessment Name'].value_counts().head(15).items():
+            kb_content.append(f"  {assessment}: {count} records")
+        kb_content.append("")
 		# ... rest unchanged, kept for backward compatibility ...
         kb_content.append("ISSUER DISTRIBUTION:")
         for issuer, count in df_cleaned['Issuer'].value_counts().items():
@@ -774,6 +782,36 @@ def create_enhanced_knowledge_base_from_rds() -> Tuple[Optional[str], int, int, 
             EmployeeRecord.qualifier
         ).all():
             kb_lines.append(f"  {qual}: {count} records")
+        kb_lines.append("")
+        kb_lines.append("TOP SKILLS:")
+        top_skills = db.session.query(
+            EmployeeRecord.skill,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).group_by(
+            EmployeeRecord.skill
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(15).all()
+        for skill, count in top_skills:
+            kb_lines.append(f"  {skill}: {count} records")
+        kb_lines.append("")
+        kb_lines.append("TOP CERTIFICATIONS (ASSESSMENTS):")
+        top_assessments = db.session.query(
+            EmployeeRecord.assessment_name,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.assessment_name.isnot(None),
+            EmployeeRecord.assessment_name != ''
+        ).group_by(
+            EmployeeRecord.assessment_name
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(15).all()
+        for assessment, count in top_assessments:
+            kb_lines.append(f"  {assessment}: {count} records")
         kb_lines.append("")
         kb_lines.append("=" * 80)
         kb_lines.append("DETAILED BREAKDOWN BY ISSUER")
