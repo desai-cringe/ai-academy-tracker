@@ -553,6 +553,16 @@
                 <span class="stat-value">{{ stats.in_progress }}</span>
             </div>
             <div class="stat-card">
+                <span class="stat-label">Not Started</span>
+                <span class="stat-value">{{ stats.not_started }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Completion Rate</span>
+                <span class="stat-value">
+                    {{ (stats.completed_journey / stats.total_employees * 100) | round(1) if stats.total_employees else 0 }}%
+                </span>
+            </div>
+            <div class="stat-card">
                 <span class="stat-label">S3 Records</span>
                 <span class="stat-value">{{ stats.all_records }}</span>
             </div>
