@@ -102,6 +102,27 @@
             margin-bottom: 1.5rem;
         }
 
+        .issuer-filter {
+            margin-bottom: 0.8rem;
+        }
+
+        .issuer-filter input {
+            width: 100%;
+            max-width: 360px;
+            padding: 0.5rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid #cbd5f5;
+            background: #ffffff;
+            font-weight: 600;
+            color: #1e293b;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .issuer-filter input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
         .issuer-chip {
             border-radius: 999px;
             border: 1px solid #c7d2fe;
@@ -246,6 +267,10 @@
             </div>
         </div>
 
+        <div class="issuer-filter">
+            <input id="issuer-filter-input" type="search" placeholder="Filter issuers by name..." aria-label="Filter issuers">
+        </div>
+
         <div class="issuer-list" id="issuer-list">
             {% for issuer in issuers %}
             <button class="issuer-chip" data-issuer="{{ issuer }}">{{ issuer }}</button>
@@ -268,6 +293,10 @@
             <div class="kpi-card">
                 <h3>Functions Covered</h3>
                 <span id="kpi-functions">0</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Skills Covered</h3>
+                <span id="kpi-skills">0</span>
             </div>
         </div>
 
@@ -298,6 +327,20 @@
                 </div>
                 <canvas id="split-chart" height="180"></canvas>
             </div>
+            <div class="panel">
+                <h2>Top Skills for Issuer</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Skill</th>
+                            <th>Completions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="skill-table">
+                        <tr><td colspan="2" class="empty-state">Select an issuer to load skills.</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="panel matrix-table">
@@ -326,6 +369,7 @@
             document.getElementById('kpi-employees').textContent = totals.employees.toLocaleString();
             document.getElementById('kpi-certs').textContent = totals.certifications.toLocaleString();
             document.getElementById('kpi-functions').textContent = totals.functions.toLocaleString();
+            document.getElementById('kpi-skills').textContent = totals.skills.toLocaleString();
         }
 
         function updateCertifications(certifications) {
@@ -338,6 +382,20 @@
             certifications.forEach((cert) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `<td>${cert.name}</td><td>${cert.count}</td>`;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updateSkills(skills) {
+            const tableBody = document.getElementById('skill-table');
+            tableBody.innerHTML = '';
+            if (!skills.length) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="empty-state">No skill data found for this issuer.</td></tr>';
+                return;
+            }
+            skills.forEach((skill) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${skill.name}</td><td>${skill.count}</td>`;
                 tableBody.appendChild(row);
             });
         }
@@ -409,6 +467,7 @@
             }
             updateKpis(data.totals);
             updateCertifications(data.certifications);
+            updateSkills(data.skills);
             updateSplitChart(data.split_label, data.split_data);
             updateMatrix(data.matrix);
         }
@@ -421,6 +480,17 @@
                 loadIssuerData();
             });
         });
+
+        const issuerFilter = document.getElementById('issuer-filter-input');
+        if (issuerFilter) {
+            issuerFilter.addEventListener('input', (event) => {
+                const query = event.target.value.trim().toLowerCase();
+                document.querySelectorAll('.issuer-chip').forEach((chip) => {
+                    const matches = chip.dataset.issuer.toLowerCase().includes(query);
+                    chip.style.display = matches ? 'inline-flex' : 'none';
+                });
+            });
+        }
 
         if (currentIssuer) {
             setActiveIssuer(currentIssuer);

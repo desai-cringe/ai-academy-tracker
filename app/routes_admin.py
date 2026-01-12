@@ -476,6 +476,20 @@ def register_admin_routes(app):
             EmployeeRecord.employee_id.isnot(None),
             EmployeeRecord.employee_id != ''
         ).scalar() or 0
+        function_count = db.session.query(
+            func.count(func.distinct(EmployeeRecord.wipro_function))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.wipro_function.isnot(None),
+            EmployeeRecord.wipro_function != ''
+        ).scalar() or 0
+        skill_count = db.session.query(
+            func.count(func.distinct(EmployeeRecord.skill))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).scalar() or 0
 
         certifications = db.session.query(
             EmployeeRecord.assessment_name,
@@ -509,6 +523,24 @@ def register_admin_routes(app):
         split_data = [
             {"label": value or "Unknown", "count": count}
             for value, count in split_rows
+        ]
+
+        skills = db.session.query(
+            EmployeeRecord.skill,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).group_by(
+            EmployeeRecord.skill
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(15).all()
+
+        skill_data = [
+            {"name": name, "count": count}
+            for name, count in skills
         ]
 
         top_certifications = [row[0] for row in certifications[:6]]
@@ -557,9 +589,11 @@ def register_admin_routes(app):
                 "records": total_records,
                 "employees": unique_employees,
                 "certifications": len(certification_data),
-                "functions": len({row["label"] for row in split_data}),
+                "functions": function_count,
+                "skills": skill_count,
             },
             "certifications": certification_data,
+            "skills": skill_data,
             "split_by": split_by,
             "split_label": split_label,
             "split_data": split_data,
