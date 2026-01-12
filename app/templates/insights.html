@@ -128,6 +128,69 @@
             margin-bottom: 2rem;
         }
 
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .detail-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .detail-card span {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            font-weight: 700;
+        }
+
+        .detail-card h4 {
+            font-size: 1.4rem;
+        }
+
+        .detail-card p {
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .action-panel {
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, #eef2ff, #ffffff);
+            border-radius: 18px;
+            padding: 1.4rem 1.6rem;
+            border: 1px solid #c7d2fe;
+            box-shadow: 0 12px 25px rgba(79, 70, 229, 0.08);
+        }
+
+        .action-panel h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .action-panel ul {
+            list-style: none;
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .action-panel li {
+            padding: 0.45rem 0.7rem;
+            border-radius: 10px;
+            background: rgba(79, 70, 229, 0.08);
+            font-size: 0.9rem;
+            color: #1e293b;
+        }
+
         .insight-card {
             background: #ffffff;
             border-radius: 16px;
@@ -346,6 +409,44 @@
                 <h4>{{ insights.summary.latest_month or 'N/A' }}</h4>
                 <p>Most recent activity window</p>
             </div>
+        </div>
+
+        {% set avg_records = (stats.all_records / stats.total_employees) | round(1) if stats.total_employees else 0 %}
+        {% set top_issuer_share = (insights.summary.top_issuer.value / stats.all_records * 100) | round(1) if stats.all_records else 0 %}
+        {% set top_skill_share = (insights.summary.top_skill.value / stats.all_records * 100) | round(1) if stats.all_records else 0 %}
+        {% set completion_rate = (stats.completed_journey / stats.total_employees * 100) | round(1) if stats.total_employees else 0 %}
+
+        <div class="detail-grid">
+            <div class="detail-card">
+                <span>Average Records / Employee</span>
+                <h4>{{ avg_records }}</h4>
+                <p>Depth of engagement across the workforce.</p>
+            </div>
+            <div class="detail-card">
+                <span>Top Issuer Share</span>
+                <h4>{{ top_issuer_share }}%</h4>
+                <p>Contribution of the #1 issuer to total records.</p>
+            </div>
+            <div class="detail-card">
+                <span>Top Skill Share</span>
+                <h4>{{ top_skill_share }}%</h4>
+                <p>Concentration of the leading skill category.</p>
+            </div>
+            <div class="detail-card">
+                <span>Completion Health</span>
+                <h4>{{ completion_rate }}%</h4>
+                <p>Share of employees who completed the journey.</p>
+            </div>
+        </div>
+
+        <div class="action-panel">
+            <h3>Production-Ready Insights & Next Actions</h3>
+            <ul>
+                <li>Scale programs in {{ insights.summary.top_issuer.label }} where demand is highest and track post-certification impact.</li>
+                <li>Accelerate enablement around {{ insights.summary.top_skill.label }} with targeted sprints and mentorship cohorts.</li>
+                <li>Prioritize progression from in-progress learners to certified outcomes using month-over-month completion targets.</li>
+                <li>Align talent allocation to functions with low coverage by launching issuer-aligned learning campaigns.</li>
+            </ul>
         </div>
 
         <div class="section-grid">

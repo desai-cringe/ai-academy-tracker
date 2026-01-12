@@ -95,6 +95,53 @@
             margin-top: 0.5rem;
         }
 
+        .headline-actions {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 1rem 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+            min-width: 260px;
+        }
+
+        .headline-actions h3 {
+            font-size: 0.9rem;
+            margin-bottom: 0.6rem;
+            color: #1e293b;
+        }
+
+        .headline-actions p {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 0.8rem;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .export-buttons button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.45rem 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: #4f46e5;
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .export-buttons button.secondary {
+            background: #0ea5e9;
+        }
+
+        .export-buttons button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(79, 70, 229, 0.25);
+        }
+
         .issuer-list {
             display: flex;
             flex-wrap: wrap;
@@ -149,6 +196,40 @@
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-bottom: 1.8rem;
+        }
+
+        .highlight-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.8rem;
+        }
+
+        .highlight-card {
+            background: linear-gradient(135deg, #eef2ff, #ffffff);
+            border-radius: 16px;
+            padding: 1rem 1.1rem;
+            border: 1px solid #c7d2fe;
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.08);
+        }
+
+        .highlight-card span {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6366f1;
+            font-weight: 700;
+        }
+
+        .highlight-card h3 {
+            margin-top: 0.4rem;
+            font-size: 1.1rem;
+        }
+
+        .highlight-card p {
+            margin-top: 0.3rem;
+            color: #475569;
+            font-size: 0.85rem;
         }
 
         .kpi-card {
@@ -265,6 +346,14 @@
                 <h1>Issuer Deep-Dive Explorer</h1>
                 <p>Click an issuer to see certification coverage, completion intensity by function, and cross-splits across key dimensions.</p>
             </div>
+            <div class="headline-actions">
+                <h3>Download split report</h3>
+                <p>Export issuer-specific KPI, skill, and function splits in Excel or PowerPoint.</p>
+                <div class="export-buttons">
+                    <button type="button" onclick="downloadSplitExport('xlsx')">⬇️ Excel</button>
+                    <button type="button" class="secondary" onclick="downloadSplitExport('pptx')">📊 PPTX</button>
+                </div>
+            </div>
         </div>
 
         <div class="issuer-filter">
@@ -297,6 +386,24 @@
             <div class="kpi-card">
                 <h3>Skills Covered</h3>
                 <span id="kpi-skills">0</span>
+            </div>
+        </div>
+
+        <div class="highlight-grid">
+            <div class="highlight-card">
+                <span>Top Certification</span>
+                <h3 id="highlight-cert">-</h3>
+                <p id="highlight-cert-count">0 completions</p>
+            </div>
+            <div class="highlight-card">
+                <span>Top Skill</span>
+                <h3 id="highlight-skill">-</h3>
+                <p id="highlight-skill-count">0 completions</p>
+            </div>
+            <div class="highlight-card">
+                <span>Leading Split</span>
+                <h3 id="highlight-split">-</h3>
+                <p id="highlight-split-count">0 completions</p>
             </div>
         </div>
 
@@ -370,6 +477,18 @@
             document.getElementById('kpi-certs').textContent = totals.certifications.toLocaleString();
             document.getElementById('kpi-functions').textContent = totals.functions.toLocaleString();
             document.getElementById('kpi-skills').textContent = totals.skills.toLocaleString();
+        }
+
+        function updateHighlights(highlights) {
+            const cert = highlights?.top_certification || { name: '-', count: 0 };
+            const skill = highlights?.top_skill || { name: '-', count: 0 };
+            const split = highlights?.top_split || { label: '-', count: 0 };
+            document.getElementById('highlight-cert').textContent = cert.name || '-';
+            document.getElementById('highlight-cert-count').textContent = `${cert.count} completions`;
+            document.getElementById('highlight-skill').textContent = skill.name || '-';
+            document.getElementById('highlight-skill-count').textContent = `${skill.count} completions`;
+            document.getElementById('highlight-split').textContent = split.label || '-';
+            document.getElementById('highlight-split-count').textContent = `${split.count} completions`;
         }
 
         function updateCertifications(certifications) {
@@ -466,10 +585,24 @@
                 return;
             }
             updateKpis(data.totals);
+            updateHighlights(data.highlights);
             updateCertifications(data.certifications);
             updateSkills(data.skills);
             updateSplitChart(data.split_label, data.split_data);
             updateMatrix(data.matrix);
+        }
+
+        function downloadSplitExport(format) {
+            if (!currentIssuer) {
+                return;
+            }
+            const splitBy = document.getElementById('split-select').value;
+            const params = new URLSearchParams({
+                format: format,
+                issuer: currentIssuer,
+                split_by: splitBy
+            });
+            window.location.href = `/admin/splits-export?${params.toString()}`;
         }
 
         document.getElementById('split-select').addEventListener('change', loadIssuerData);

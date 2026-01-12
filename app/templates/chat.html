@@ -27,6 +27,30 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before,
+        body::after {
+            content: '';
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            filter: blur(0);
+            background: rgba(255, 255, 255, 0.12);
+            z-index: 0;
+        }
+
+        body::before {
+            top: -120px;
+            right: -80px;
+        }
+
+        body::after {
+            bottom: -140px;
+            left: -120px;
         }
         
         @keyframes gradientShift {
@@ -81,6 +105,13 @@
             gap: 0.75rem;
             text-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
+
+        .header-subtitle {
+            font-size: 0.9rem;
+            opacity: 0.85;
+            margin-top: 0.3rem;
+            font-weight: 500;
+        }
         
         .nav-links {
             display: flex;
@@ -129,9 +160,9 @@
             backdrop-filter: blur(20px);
             border-radius: 25px;
             box-shadow: 
-                0 25px 50px rgba(0,0,0,0.1),
-                0 0 0 1px rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
+                0 25px 50px rgba(0,0,0,0.15),
+                0 0 0 1px rgba(255,255,255,0.25);
+            border: 1px solid rgba(255,255,255,0.4);
             overflow: hidden;
             height: calc(100vh - 200px);
             min-height: 600px;
@@ -146,7 +177,7 @@
         }
         
         .chat-header {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #312e81, #4c1d95, #7c3aed);
             color: white;
             padding: 2rem;
             text-align: center;
@@ -176,12 +207,30 @@
             position: relative;
             z-index: 2;
         }
-        
+
         .chat-header p {
             font-size: 1rem;
             opacity: 0.9;
             position: relative;
             z-index: 2;
+        }
+
+        .chat-header-badges {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.6rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .chat-badge {
+            padding: 0.35rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.3);
         }
 
         .chat-header-actions {
@@ -257,7 +306,7 @@
             color: #333;
             align-self: flex-start;
             border-bottom-left-radius: 8px;
-            border: 1px solid rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.15);
         }
         
         .message.bot::before {
@@ -534,11 +583,28 @@
             border-radius: 20px;
             border: 1px solid rgba(102, 126, 234, 0.1);
         }
-        
+
         .welcome-message h3 {
             color: #333;
             margin-bottom: 1rem;
             font-weight: 700;
+        }
+
+        .welcome-message .badge-row {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            justify-content: center;
+        }
+
+        .welcome-badge {
+            padding: 0.3rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(102, 126, 234, 0.1);
+            color: #4c51bf;
+            font-size: 0.75rem;
+            font-weight: 600;
         }
         
         @media (max-width: 768px) {
@@ -580,7 +646,10 @@
 <body>
     <div class="header">
         <div class="header-container">
-            <h1>🤖 AI Data Chat Assistant</h1>
+            <div>
+                <h1>🤖 AI Data Chat Assistant</h1>
+                <div class="header-subtitle">Ask, explore, and export insights with your data copilot.</div>
+            </div>
             <div class="nav-links">
                 <span>{{ username }}</span>
                 <a href="/admin">📊 Dashboard</a>
@@ -598,6 +667,12 @@
             <div class="chat-header">
                 <h2>✨ Chat with Your Data</h2>
                 <p>Ask questions about your employee learning data powered by Amazon Nova Pro (Bedrock), with voice + export support</p>
+                <div class="chat-header-badges">
+                    <span class="chat-badge">Live KPIs</span>
+                    <span class="chat-badge">Issuer + Skill Lens</span>
+                    <span class="chat-badge">Export Ready</span>
+                    <span class="chat-badge">Voice Enabled</span>
+                </div>
                 <div class="chat-header-actions">
                     <button class="chat-action-btn" id="clear-chat-btn">🧹 Clear chat</button>
                     <button class="chat-action-btn secondary" id="copy-last-btn">📋 Copy last answer</button>
@@ -612,6 +687,11 @@
                     <p>• Employee progress • Issuer, certification, and skill performance • Level/qualifier distributions • Learning trends by function</p>
                     <br>
                     <p>🎙️ You can ask by voice and play responses aloud. When you request exports I can provide Excel or PPTX downloads with filters.</p>
+                    <div class="badge-row">
+                        <span class="welcome-badge">Executive summaries</span>
+                        <span class="welcome-badge">Skill heatmaps</span>
+                        <span class="welcome-badge">Completion trends</span>
+                    </div>
                 </div>
             </div>
             

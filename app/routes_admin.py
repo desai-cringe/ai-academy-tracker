@@ -159,6 +159,260 @@ def register_admin_routes(app):
             rows.append(row)
         return rows
 
+    def _get_split_insights(issuer: str, split_by: str) -> dict:
+        split_columns = {
+            "wipro_function": ("Wipro Function", EmployeeRecord.wipro_function),
+            "level": ("Level", EmployeeRecord.level),
+            "qualifier": ("Qualifier", EmployeeRecord.qualifier),
+            "skill": ("Skill", EmployeeRecord.skill),
+        }
+        if split_by not in split_columns:
+            raise ValueError("Invalid split column.")
+
+        split_label, split_column = split_columns[split_by]
+
+        total_records = db.session.query(func.count(EmployeeRecord.id)).filter(
+            EmployeeRecord.issuer == issuer
+        ).scalar() or 0
+        unique_employees = db.session.query(
+            func.count(func.distinct(EmployeeRecord.employee_id))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.employee_id.isnot(None),
+            EmployeeRecord.employee_id != ''
+        ).scalar() or 0
+        function_count = db.session.query(
+            func.count(func.distinct(EmployeeRecord.wipro_function))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.wipro_function.isnot(None),
+            EmployeeRecord.wipro_function != ''
+        ).scalar() or 0
+        skill_count = db.session.query(
+            func.count(func.distinct(EmployeeRecord.skill))
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).scalar() or 0
+
+        certifications = db.session.query(
+            EmployeeRecord.assessment_name,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.assessment_name.isnot(None),
+            EmployeeRecord.assessment_name != ''
+        ).group_by(
+            EmployeeRecord.assessment_name
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(25).all()
+
+        certification_data = [
+            {"name": name, "count": count}
+            for name, count in certifications
+        ]
+
+        split_rows = db.session.query(
+            split_column,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer
+        ).group_by(
+            split_column
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(12).all()
+
+        split_data = [
+            {"label": value or "Unknown", "count": count}
+            for value, count in split_rows
+        ]
+
+        skills = db.session.query(
+            EmployeeRecord.skill,
+            func.count(EmployeeRecord.id)
+        ).filter(
+            EmployeeRecord.issuer == issuer,
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).group_by(
+            EmployeeRecord.skill
+        ).order_by(
+            func.count(EmployeeRecord.id).desc()
+        ).limit(15).all()
+
+        skill_data = [
+            {"name": name, "count": count}
+            for name, count in skills
+        ]
+
+        top_certifications = [row[0] for row in certifications[:6]]
+        top_functions = [
+            row[0] or "Unknown"
+            for row in db.session.query(
+                EmployeeRecord.wipro_function,
+                func.count(EmployeeRecord.id)
+            ).filter(
+                EmployeeRecord.issuer == issuer
+            ).group_by(
+                EmployeeRecord.wipro_function
+            ).order_by(
+                func.count(EmployeeRecord.id).desc()
+            ).limit(6).all()
+        ]
+
+        matrix_rows = []
+        if top_certifications and top_functions:
+            matrix_rows = db.session.query(
+                EmployeeRecord.assessment_name,
+                EmployeeRecord.wipro_function,
+                func.count(EmployeeRecord.id)
+            ).filter(
+                EmployeeRecord.issuer == issuer,
+                EmployeeRecord.assessment_name.in_(top_certifications),
+                EmployeeRecord.wipro_function.in_(top_functions)
+            ).group_by(
+                EmployeeRecord.assessment_name,
+                EmployeeRecord.wipro_function
+            ).all()
+
+        matrix = {
+            cert: {function: 0 for function in top_functions}
+            for cert in top_certifications
+        }
+        for cert_name, function, count in matrix_rows:
+            function_key = function or "Unknown"
+            if cert_name in matrix and function_key in matrix[cert_name]:
+                matrix[cert_name][function_key] = count
+
+        top_cert = certification_data[0] if certification_data else {"name": "N/A", "count": 0}
+        top_skill = skill_data[0] if skill_data else {"name": "N/A", "count": 0}
+        top_split = split_data[0] if split_data else {"label": "N/A", "count": 0}
+
+        return {
+            "issuer": issuer,
+            "totals": {
+                "records": total_records,
+                "employees": unique_employees,
+                "certifications": len(certification_data),
+                "functions": function_count,
+                "skills": skill_count,
+            },
+            "certifications": certification_data,
+            "skills": skill_data,
+            "split_by": split_by,
+            "split_label": split_label,
+            "split_data": split_data,
+            "matrix": {
+                "certifications": top_certifications,
+                "functions": top_functions,
+                "data": matrix
+            },
+            "highlights": {
+                "top_certification": top_cert,
+                "top_skill": top_skill,
+                "top_split": top_split,
+            }
+        }
+
+    def _build_splits_pptx_report(split_payload: dict) -> BytesIO:
+        from pptx import Presentation
+        from pptx.chart.data import ChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.util import Inches, Pt
+
+        prs = Presentation()
+        issuer = split_payload["issuer"]
+        split_label = split_payload["split_label"]
+        totals = split_payload["totals"]
+        highlights = split_payload["highlights"]
+
+        title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+        title_slide.shapes.title.text = "Issuer Split Report"
+        subtitle = title_slide.placeholders[1]
+        subtitle.text = f"Issuer: {issuer}\nSplit by: {split_label}"
+
+        kpi_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        kpi_slide.shapes.title.text = "Issuer KPIs"
+        kpi_box = kpi_slide.shapes.add_textbox(Inches(0.7), Inches(1.4), Inches(8.5), Inches(3))
+        kpi_frame = kpi_box.text_frame
+        kpi_frame.word_wrap = True
+        kpi_frame.text = f"Total Records: {totals['records']}"
+        for line in [
+            f"Unique Employees: {totals['employees']}",
+            f"Certifications: {totals['certifications']}",
+            f"Functions Covered: {totals['functions']}",
+            f"Skills Covered: {totals['skills']}",
+            f"Top Certification: {highlights['top_certification']['name']} ({highlights['top_certification']['count']})",
+            f"Top Skill: {highlights['top_skill']['name']} ({highlights['top_skill']['count']})",
+            f"Top {split_label}: {highlights['top_split']['label']} ({highlights['top_split']['count']})",
+        ]:
+            paragraph = kpi_frame.add_paragraph()
+            paragraph.text = line
+            paragraph.font.size = Pt(18)
+
+        split_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        split_slide.shapes.title.text = f"{split_label} Split"
+        chart_data = ChartData()
+        split_data = split_payload["split_data"]
+        chart_data.categories = [item["label"] for item in split_data] or ["No Data"]
+        chart_data.add_series(
+            "Completions",
+            [item["count"] for item in split_data] or [0]
+        )
+        split_slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED,
+            Inches(0.8),
+            Inches(1.6),
+            Inches(8.6),
+            Inches(4.5),
+            chart_data,
+        )
+
+        insight_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        insight_slide.shapes.title.text = "Top Certifications & Skills"
+        text_box = insight_slide.shapes.add_textbox(Inches(0.7), Inches(1.4), Inches(8.5), Inches(4))
+        text_frame = text_box.text_frame
+        text_frame.word_wrap = True
+        text_frame.text = "Certifications:"
+        for item in split_payload["certifications"][:8]:
+            paragraph = text_frame.add_paragraph()
+            paragraph.text = f"- {item['name']}: {item['count']}"
+            paragraph.level = 1
+        text_frame.add_paragraph().text = ""
+        skills_header = text_frame.add_paragraph()
+        skills_header.text = "Skills:"
+        for item in split_payload["skills"][:8]:
+            paragraph = text_frame.add_paragraph()
+            paragraph.text = f"- {item['name']}: {item['count']}"
+            paragraph.level = 1
+
+        matrix = split_payload["matrix"]
+        if matrix["certifications"] and matrix["functions"]:
+            matrix_slide = prs.slides.add_slide(prs.slide_layouts[5])
+            matrix_slide.shapes.title.text = "Top Certifications by Function"
+            rows = len(matrix["certifications"]) + 1
+            cols = len(matrix["functions"]) + 1
+            table = matrix_slide.shapes.add_table(
+                rows, cols, Inches(0.4), Inches(1.4), Inches(9.1), Inches(4.8)
+            ).table
+            table.cell(0, 0).text = "Certification"
+            for idx, fn in enumerate(matrix["functions"], start=1):
+                table.cell(0, idx).text = fn
+            for row_idx, cert in enumerate(matrix["certifications"], start=1):
+                table.cell(row_idx, 0).text = cert
+                for col_idx, fn in enumerate(matrix["functions"], start=1):
+                    table.cell(row_idx, col_idx).text = str(
+                        matrix["data"].get(cert, {}).get(fn, 0)
+                    )
+
+        output = BytesIO()
+        prs.save(output)
+        output.seek(0)
+        return output
+
     def _build_pptx_report(records, filters: dict):
         from pptx import Presentation
         from pptx.chart.data import ChartData
@@ -455,154 +709,86 @@ def register_admin_routes(app):
         if not issuer:
             return jsonify({"success": False, "error": "Issuer is required."}), 400
 
-        split_columns = {
-            "wipro_function": ("Wipro Function", EmployeeRecord.wipro_function),
-            "level": ("Level", EmployeeRecord.level),
-            "qualifier": ("Qualifier", EmployeeRecord.qualifier),
-            "skill": ("Skill", EmployeeRecord.skill),
-        }
-        if split_by not in split_columns:
-            return jsonify({"success": False, "error": "Invalid split column."}), 400
-
-        split_label, split_column = split_columns[split_by]
-
-        total_records = db.session.query(func.count(EmployeeRecord.id)).filter(
-            EmployeeRecord.issuer == issuer
-        ).scalar() or 0
-        unique_employees = db.session.query(
-            func.count(func.distinct(EmployeeRecord.employee_id))
-        ).filter(
-            EmployeeRecord.issuer == issuer,
-            EmployeeRecord.employee_id.isnot(None),
-            EmployeeRecord.employee_id != ''
-        ).scalar() or 0
-        function_count = db.session.query(
-            func.count(func.distinct(EmployeeRecord.wipro_function))
-        ).filter(
-            EmployeeRecord.issuer == issuer,
-            EmployeeRecord.wipro_function.isnot(None),
-            EmployeeRecord.wipro_function != ''
-        ).scalar() or 0
-        skill_count = db.session.query(
-            func.count(func.distinct(EmployeeRecord.skill))
-        ).filter(
-            EmployeeRecord.issuer == issuer,
-            EmployeeRecord.skill.isnot(None),
-            EmployeeRecord.skill != ''
-        ).scalar() or 0
-
-        certifications = db.session.query(
-            EmployeeRecord.assessment_name,
-            func.count(EmployeeRecord.id)
-        ).filter(
-            EmployeeRecord.issuer == issuer,
-            EmployeeRecord.assessment_name.isnot(None),
-            EmployeeRecord.assessment_name != ''
-        ).group_by(
-            EmployeeRecord.assessment_name
-        ).order_by(
-            func.count(EmployeeRecord.id).desc()
-        ).limit(25).all()
-
-        certification_data = [
-            {"name": name, "count": count}
-            for name, count in certifications
-        ]
-
-        split_rows = db.session.query(
-            split_column,
-            func.count(EmployeeRecord.id)
-        ).filter(
-            EmployeeRecord.issuer == issuer
-        ).group_by(
-            split_column
-        ).order_by(
-            func.count(EmployeeRecord.id).desc()
-        ).limit(12).all()
-
-        split_data = [
-            {"label": value or "Unknown", "count": count}
-            for value, count in split_rows
-        ]
-
-        skills = db.session.query(
-            EmployeeRecord.skill,
-            func.count(EmployeeRecord.id)
-        ).filter(
-            EmployeeRecord.issuer == issuer,
-            EmployeeRecord.skill.isnot(None),
-            EmployeeRecord.skill != ''
-        ).group_by(
-            EmployeeRecord.skill
-        ).order_by(
-            func.count(EmployeeRecord.id).desc()
-        ).limit(15).all()
-
-        skill_data = [
-            {"name": name, "count": count}
-            for name, count in skills
-        ]
-
-        top_certifications = [row[0] for row in certifications[:6]]
-        top_functions = [
-            row[0] or "Unknown"
-            for row in db.session.query(
-                EmployeeRecord.wipro_function,
-                func.count(EmployeeRecord.id)
-            ).filter(
-                EmployeeRecord.issuer == issuer
-            ).group_by(
-                EmployeeRecord.wipro_function
-            ).order_by(
-                func.count(EmployeeRecord.id).desc()
-            ).limit(6).all()
-        ]
-
-        matrix_rows = []
-        if top_certifications and top_functions:
-            matrix_rows = db.session.query(
-                EmployeeRecord.assessment_name,
-                EmployeeRecord.wipro_function,
-                func.count(EmployeeRecord.id)
-            ).filter(
-                EmployeeRecord.issuer == issuer,
-                EmployeeRecord.assessment_name.in_(top_certifications),
-                EmployeeRecord.wipro_function.in_(top_functions)
-            ).group_by(
-                EmployeeRecord.assessment_name,
-                EmployeeRecord.wipro_function
-            ).all()
-
-        matrix = {
-            cert: {function: 0 for function in top_functions}
-            for cert in top_certifications
-        }
-        for cert_name, function, count in matrix_rows:
-            function_key = function or "Unknown"
-            if cert_name in matrix and function_key in matrix[cert_name]:
-                matrix[cert_name][function_key] = count
+        try:
+            payload = _get_split_insights(issuer, split_by)
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
 
         return jsonify({
             "success": True,
-            "issuer": issuer,
-            "totals": {
-                "records": total_records,
-                "employees": unique_employees,
-                "certifications": len(certification_data),
-                "functions": function_count,
-                "skills": skill_count,
-            },
-            "certifications": certification_data,
-            "skills": skill_data,
-            "split_by": split_by,
-            "split_label": split_label,
-            "split_data": split_data,
-            "matrix": {
-                "certifications": top_certifications,
-                "functions": top_functions,
-                "data": matrix
-            }
+            **payload
         })
+
+    @app.route('/admin/splits-export')
+    @login_required
+    def admin_splits_export():
+        """Export issuer split data to Excel or PPTX."""
+        issuer = request.args.get('issuer', '').strip()
+        split_by = request.args.get('split_by', 'wipro_function').strip()
+        export_format = request.args.get('format', 'xlsx').lower()
+        if not issuer:
+            return jsonify({"success": False, "error": "Issuer is required."}), 400
+
+        try:
+            payload = _get_split_insights(issuer, split_by)
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        if export_format == 'pptx':
+            pptx_stream = _build_splits_pptx_report(payload)
+            filename = f"issuer_split_{timestamp}.pptx"
+            return send_file(
+                pptx_stream,
+                mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                as_attachment=True,
+                download_name=filename
+            )
+
+        output = BytesIO()
+        summary = {
+            "Issuer": payload["issuer"],
+            "Split By": payload["split_label"],
+            "Total Records": payload["totals"]["records"],
+            "Unique Employees": payload["totals"]["employees"],
+            "Certifications": payload["totals"]["certifications"],
+            "Functions Covered": payload["totals"]["functions"],
+            "Skills Covered": payload["totals"]["skills"],
+            "Top Certification": payload["highlights"]["top_certification"]["name"],
+            "Top Certification Count": payload["highlights"]["top_certification"]["count"],
+            "Top Skill": payload["highlights"]["top_skill"]["name"],
+            "Top Skill Count": payload["highlights"]["top_skill"]["count"],
+            "Top Split Dimension": payload["highlights"]["top_split"]["label"],
+            "Top Split Count": payload["highlights"]["top_split"]["count"],
+        }
+
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            pd.DataFrame([summary]).to_excel(writer, index=False, sheet_name='Summary')
+            pd.DataFrame(payload["certifications"]).to_excel(
+                writer, index=False, sheet_name='Certifications'
+            )
+            pd.DataFrame(payload["split_data"]).to_excel(
+                writer, index=False, sheet_name='Split'
+            )
+            pd.DataFrame(payload["skills"]).to_excel(
+                writer, index=False, sheet_name='Skills'
+            )
+            matrix = payload["matrix"]
+            if matrix["certifications"] and matrix["functions"]:
+                matrix_df = pd.DataFrame(matrix["data"]).T
+                matrix_df = matrix_df.reindex(matrix["certifications"])
+                matrix_df = matrix_df[matrix["functions"]]
+                matrix_df.to_excel(writer, sheet_name='Matrix')
+
+        output.seek(0)
+        filename = f"issuer_split_{timestamp}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
 
     # --- Chat API --- #
 
