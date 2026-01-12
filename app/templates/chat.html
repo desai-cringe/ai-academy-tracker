@@ -152,6 +152,10 @@
             text-align: center;
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.9rem;
         }
         
         .chat-header::before {
@@ -178,6 +182,40 @@
             opacity: 0.9;
             position: relative;
             z-index: 2;
+        }
+
+        .chat-header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .chat-action-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.3s ease;
+        }
+
+        .chat-action-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-1px);
+        }
+
+        .chat-action-btn.secondary {
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.25);
         }
         
         .chat-messages {
@@ -442,14 +480,19 @@
             display: flex;
             align-items: center;
             gap: 0.4rem;
+            background: rgba(102, 126, 234, 0.08);
+            padding: 0.6rem 0.9rem;
+            border-radius: 14px;
         }
 
         .voice-status.error {
             color: #c53030;
+            background: rgba(252, 129, 129, 0.15);
         }
 
         .voice-status.success {
             color: #2f855a;
+            background: rgba(72, 187, 120, 0.15);
         }
 
         .export-actions {
@@ -554,6 +597,10 @@
             <div class="chat-header">
                 <h2>✨ Chat with Your Data</h2>
                 <p>Ask questions about your employee learning data powered by Amazon Nova Pro (Bedrock), with voice + export support</p>
+                <div class="chat-header-actions">
+                    <button class="chat-action-btn" id="clear-chat-btn">🧹 Clear chat</button>
+                    <button class="chat-action-btn secondary" id="copy-last-btn">📋 Copy last answer</button>
+                </div>
             </div>
             
             <div class="chat-messages" id="chat-messages">
@@ -633,7 +680,7 @@
                     </button>
                 </form>
                 <div class="voice-status" id="voice-status">
-                    🎙️ Voice ready. Click the mic to start recording.
+                    🎙️ Voice ready. Click the mic to start recording (HTTPS + supported browser required).
                 </div>
             </div>
         </div>
@@ -641,10 +688,19 @@
     
     <script>
         const audioCache = new Map();
+        let welcomeMessageTemplate = '';
 
         function fillExample(text) {
             document.getElementById('chat-input').value = text;
             document.getElementById('chat-input').focus();
+        }
+
+        function isAudioRecordingSupported() {
+            return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+        }
+
+        function getSpeechRecognition() {
+            return window.SpeechRecognition || window.webkitSpeechRecognition || null;
         }
 
         function buildExportActions(filters) {
@@ -825,7 +881,16 @@
         }
 
         function isVoiceSupported() {
-            return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+            return isAudioRecordingSupported() || !!getSpeechRecognition();
+        }
+
+        function getLastBotMessageText() {
+            const messagesContainer = document.getElementById('chat-messages');
+            const botMessages = messagesContainer.querySelectorAll('.message.bot .message-content');
+            if (!botMessages.length) {
+                return null;
+            }
+            return botMessages[botMessages.length - 1].innerText.trim();
         }
 
         document.getElementById('chat-form').addEventListener('submit', async function(e) {
@@ -860,17 +925,22 @@
             if (voiceButton.dataset.recording === 'true') {
                 voiceButton.dataset.recording = 'false';
                 voiceButton.classList.remove('recording');
-                if (voiceButton._recorder) {
+                if (voiceButton.dataset.mode === 'speech' && voiceButton._speechRecognition) {
+                    voiceButton._speechRecognition.stop();
+                } else if (voiceButton._recorder) {
                     voiceButton._recorder.stop();
                 }
-                setVoiceStatus('Transcribing your question...', 'info');
+                const statusMessage = voiceButton.dataset.mode === 'speech'
+                    ? 'Processing your question...'
+                    : 'Transcribing your question...';
+                setVoiceStatus(statusMessage, 'info');
                 return;
             }
 
             try {
                 if (!isVoiceSupported()) {
-                    addMessage('Voice input is not supported in this browser. Please try Chrome or Edge.', false, null, 'Error', true);
-                    setVoiceStatus('Voice input not supported in this browser.', 'error');
+                    addMessage('Voice input is not supported in this browser. Please try Chrome or Edge, or use the text box below.', false, null, 'Error', true);
+                    setVoiceStatus('Voice input not supported in this browser. Use text input instead.', 'error');
                     voiceButton.disabled = true;
                     return;
                 }
@@ -881,9 +951,53 @@
                     return;
                 }
 
+                const SpeechRecognition = getSpeechRecognition();
+                if (!isAudioRecordingSupported() && SpeechRecognition) {
+                    const recognition = new SpeechRecognition();
+                    recognition.lang = 'en-US';
+                    recognition.interimResults = false;
+                    recognition.maxAlternatives = 1;
+                    voiceButton.dataset.recording = 'true';
+                    voiceButton.dataset.mode = 'speech';
+                    voiceButton.classList.add('recording');
+                    voiceButton._speechRecognition = recognition;
+                    setVoiceStatus('Listening... click the mic again to stop.', 'success');
+
+                    recognition.addEventListener('result', async (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        voiceButton.dataset.recording = 'false';
+                        voiceButton.classList.remove('recording');
+                        setVoiceStatus('Voice captured. Sending...', 'info');
+                        await handleUserMessage(transcript);
+                        setVoiceStatus('Voice ready. Click the mic to start recording.', 'info');
+                    });
+
+                    recognition.addEventListener('error', (event) => {
+                        const errorMessage = event.error === 'not-allowed'
+                            ? 'Microphone permission denied. Please allow access in your browser settings.'
+                            : 'Voice recognition failed. Please try again.';
+                        addMessage(errorMessage, false, null, 'Error', true);
+                        setVoiceStatus(errorMessage, 'error');
+                        voiceButton.dataset.recording = 'false';
+                        voiceButton.classList.remove('recording');
+                    });
+
+                    recognition.addEventListener('end', () => {
+                        if (voiceButton.dataset.recording === 'true') {
+                            voiceButton.dataset.recording = 'false';
+                            voiceButton.classList.remove('recording');
+                            setVoiceStatus('Voice ready. Click the mic to start recording.', 'info');
+                        }
+                    });
+
+                    recognition.start();
+                    return;
+                }
+
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                 voiceButton.dataset.recording = 'true';
+                voiceButton.dataset.mode = 'recorder';
                 voiceButton.classList.add('recording');
                 voiceButton._recorder = recorder;
                 const chunks = [];
@@ -920,11 +1034,43 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('chat-input').focus();
+            const welcomeMessage = document.querySelector('.welcome-message');
+            if (welcomeMessage) {
+                welcomeMessageTemplate = welcomeMessage.outerHTML;
+            }
             const voiceButton = document.getElementById('chat-voice-btn');
             if (!isVoiceSupported()) {
                 voiceButton.disabled = true;
                 setVoiceStatus('Voice input is not supported in this browser.', 'error');
+                return;
             }
+
+            if (!isAudioRecordingSupported() && getSpeechRecognition()) {
+                setVoiceStatus('Voice ready (browser speech recognition). Click the mic to start.', 'info');
+            }
+
+            const clearBtn = document.getElementById('clear-chat-btn');
+            const copyBtn = document.getElementById('copy-last-btn');
+
+            clearBtn.addEventListener('click', () => {
+                const messagesContainer = document.getElementById('chat-messages');
+                messagesContainer.innerHTML = welcomeMessageTemplate || '';
+            });
+
+            copyBtn.addEventListener('click', async () => {
+                const text = getLastBotMessageText();
+                if (!text) {
+                    setVoiceStatus('No assistant response to copy yet.', 'error');
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(text);
+                    setVoiceStatus('Latest assistant response copied to clipboard.', 'success');
+                } catch (error) {
+                    console.error('Clipboard error:', error);
+                    setVoiceStatus('Unable to copy response. Please try again.', 'error');
+                }
+            });
         });
     </script>
 </body>

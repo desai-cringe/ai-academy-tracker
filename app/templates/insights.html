@@ -121,6 +121,63 @@
             font-weight: 700;
         }
 
+        .insight-highlights {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .insight-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .insight-card span {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .insight-card h4 {
+            margin-top: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .insight-card p {
+            margin-top: 0.4rem;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-chip {
+            padding: 0.5rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid #dbeafe;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .filter-chip:hover {
+            background: #dbeafe;
+        }
+
         .section-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -230,8 +287,8 @@
                 <span>{{ stats.total_employees }}</span>
             </div>
             <div class="kpi-card">
-                <h3>Total Records</h3>
-                <span>{{ stats.all_records }}</span>
+                <h3>Completion Rate</h3>
+                <span>{{ (stats.completed_journey / stats.total_employees * 100) | round(1) if stats.total_employees else 0 }}%</span>
             </div>
             <div class="kpi-card">
                 <h3>Completed Journey</h3>
@@ -240,6 +297,53 @@
             <div class="kpi-card">
                 <h3>In Progress</h3>
                 <span>{{ stats.in_progress }}</span>
+            </div>
+            <div class="kpi-card">
+                <h3>In Progress Rate</h3>
+                <span>{{ (stats.in_progress / stats.total_employees * 100) | round(1) if stats.total_employees else 0 }}%</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Not Started</h3>
+                <span>{{ stats.not_started }}</span>
+            </div>
+            <div class="kpi-card">
+                <h3>Total Records</h3>
+                <span>{{ stats.all_records }}</span>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <button class="filter-chip" data-target="levelFilter" data-value="Level 2">Focus Level 2</button>
+            <button class="filter-chip" data-target="qualifierFilter" data-value="Certified">Certified</button>
+            <button class="filter-chip" data-target="issuerFilter" data-value="{{ insights.issuer_labels[0] if insights.issuer_labels else 'Microsoft' }}">Top Issuer</button>
+            <button class="filter-chip" data-target="skillFilter" data-value="{{ insights.skill_labels[0] if insights.skill_labels else 'Generative AI' }}">Top Skill</button>
+        </div>
+
+        <div class="insight-highlights">
+            <div class="insight-card">
+                <span>Top Issuer</span>
+                <h4>{{ insights.summary.top_issuer.label }}</h4>
+                <p>{{ insights.summary.top_issuer.value }} total records</p>
+            </div>
+            <div class="insight-card">
+                <span>Top Skill</span>
+                <h4>{{ insights.summary.top_skill.label }}</h4>
+                <p>{{ insights.summary.top_skill.value }} total records</p>
+            </div>
+            <div class="insight-card">
+                <span>Top Qualifier</span>
+                <h4>{{ insights.summary.top_qualifier.label }}</h4>
+                <p>{{ insights.summary.top_qualifier.value }} records</p>
+            </div>
+            <div class="insight-card">
+                <span>Peak Completion Month</span>
+                <h4>{{ insights.summary.peak_month or 'N/A' }}</h4>
+                <p>Highest completions on record</p>
+            </div>
+            <div class="insight-card">
+                <span>Latest Completion Month</span>
+                <h4>{{ insights.summary.latest_month or 'N/A' }}</h4>
+                <p>Most recent activity window</p>
             </div>
         </div>
 
@@ -297,6 +401,14 @@
             <div>
                 <label for="assessmentFilter">Assessment Name</label>
                 <input id="assessmentFilter" placeholder="Certification Name">
+            </div>
+            <div>
+                <label for="employeeFilter">Employee ID</label>
+                <input id="employeeFilter" placeholder="12345">
+            </div>
+            <div>
+                <label for="functionFilter">Wipro Function</label>
+                <input id="functionFilter" placeholder="Consulting">
             </div>
             <div>
                 <label for="startDate">Start Date</label>
@@ -386,11 +498,25 @@
                 qualifier: document.getElementById('qualifierFilter').value,
                 skill: document.getElementById('skillFilter').value,
                 assessment_name: document.getElementById('assessmentFilter').value,
+                employee_id: document.getElementById('employeeFilter').value,
+                wipro_function: document.getElementById('functionFilter').value,
                 start_date: document.getElementById('startDate').value,
                 end_date: document.getElementById('endDate').value
             });
             window.location.href = `/admin/exports?${params.toString()}`;
         }
+
+        document.querySelectorAll('.filter-chip').forEach((chip) => {
+            chip.addEventListener('click', () => {
+                const targetId = chip.dataset.target;
+                const value = chip.dataset.value || '';
+                const input = document.getElementById(targetId);
+                if (input) {
+                    input.value = value;
+                    input.focus();
+                }
+            });
+        });
     </script>
 </body>
 </html>

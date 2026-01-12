@@ -345,6 +345,7 @@ def get_employee_stats_from_rds() -> Dict[str, int]:
                 'total_employees': 0,
                 'completed_journey': 0,
                 'in_progress': 0,
+                'not_started': 0,
                 'all_records': 0,
                 'rds_records': 0,
                 'last_updated': 'No data'
@@ -356,6 +357,7 @@ def get_employee_stats_from_rds() -> Dict[str, int]:
 
         completed_journey = 0
         in_progress = 0
+        not_started = 0
 
         try:
             result = db.session.execute(text("""
@@ -378,17 +380,21 @@ def get_employee_stats_from_rds() -> Dict[str, int]:
                     completed_journey += 1
                 elif max_level >= 0:
                     in_progress += 1
+                else:
+                    not_started += 1
         except Exception as level_error:
             logger.warning(f"⚠️ Error in level analysis, using fallback: {level_error}")
             completed_journey = db.session.query(EmployeeRecord).filter(
                 EmployeeRecord.level.like('%Level 2%')
             ).count()
             in_progress = unique_employees - completed_journey
+            not_started = max(unique_employees - completed_journey - in_progress, 0)
 
         stats = {
             'total_employees': unique_employees,
             'completed_journey': completed_journey,
             'in_progress': in_progress,
+            'not_started': not_started,
             'all_records': all_records,
             'rds_records': all_records,
             'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -401,6 +407,7 @@ def get_employee_stats_from_rds() -> Dict[str, int]:
             'total_employees': 0,
             'completed_journey': 0,
             'in_progress': 0,
+            'not_started': 0,
             'all_records': 0,
             'rds_records': 0,
             'last_updated': 'Error'
@@ -519,6 +526,17 @@ def get_advanced_insights_data() -> Dict:
 
         months_sorted = sorted(completion_month_counts.keys())
         completion_values = [completion_month_counts[m] for m in months_sorted]
+        peak_month = None
+        if completion_month_counts:
+            peak_month = max(completion_month_counts.items(), key=lambda item: item[1])[0]
+
+        top_issuer_label = top_issuers[0][0] if top_issuers else "N/A"
+        top_issuer_value = top_issuers[0][1] if top_issuers else 0
+        top_skill_label = top_skills[0][0] if top_skills else "N/A"
+        top_skill_value = top_skills[0][1] if top_skills else 0
+        top_qualifier_label = qualifier_breakdown[0][0] if qualifier_breakdown else "N/A"
+        top_qualifier_value = qualifier_breakdown[0][1] if qualifier_breakdown else 0
+        latest_month = months_sorted[-1] if months_sorted else None
 
         return {
             "level_labels": list(level_counts.keys()) or ["Level 0", "Level 1", "Level 2"],
@@ -531,6 +549,13 @@ def get_advanced_insights_data() -> Dict:
             "qualifier_values": [item[1] for item in qualifier_breakdown],
             "completion_months": months_sorted,
             "completion_values": completion_values,
+            "summary": {
+                "top_issuer": {"label": top_issuer_label, "value": top_issuer_value},
+                "top_skill": {"label": top_skill_label, "value": top_skill_value},
+                "top_qualifier": {"label": top_qualifier_label, "value": top_qualifier_value},
+                "peak_month": peak_month,
+                "latest_month": latest_month,
+            },
         }
     except Exception as e:
         logger.error(f"❌ Error building advanced insights: {e}")
@@ -545,6 +570,13 @@ def get_advanced_insights_data() -> Dict:
             "qualifier_values": [],
             "completion_months": [],
             "completion_values": [],
+            "summary": {
+                "top_issuer": {"label": "N/A", "value": 0},
+                "top_skill": {"label": "N/A", "value": 0},
+                "top_qualifier": {"label": "N/A", "value": 0},
+                "peak_month": None,
+                "latest_month": None,
+            },
         }
 
 
