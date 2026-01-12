@@ -304,6 +304,33 @@
             background: rgba(255,255,255,0.8);
             backdrop-filter: blur(15px);
         }
+
+        .insight-highlights {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .insight-card {
+            padding: 0.85rem 1rem;
+            border-radius: 16px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(255,255,255,0.95));
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #2d3748;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .insight-card span {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #4c51bf;
+        }
         
         .examples-section {
             margin-bottom: 1rem;
@@ -402,6 +429,29 @@
             box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.15);
         }
 
+        .chat-voice-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .voice-status {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            color: #4a5568;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .voice-status.error {
+            color: #c53030;
+        }
+
+        .voice-status.success {
+            color: #2f855a;
+        }
+
         .export-actions {
             margin-top: 0.75rem;
             display: flex;
@@ -477,6 +527,10 @@
                 max-width: 95%;
                 padding: 1rem 1.5rem;
             }
+
+            .insight-highlights {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -507,9 +561,9 @@
                     <h3>🎯 Welcome to Your AI Data Assistant!</h3>
                     <p>I'm powered by Amazon Nova Pro (Bedrock) and have access to your current employee learning data. Ask me anything about:</p>
                     <br>
-                    <p>• Employee progress and completions • Level distributions • Issuer-specific analytics • Learning trends and statistics</p>
+                    <p>• Employee progress • Issuer, certification, and skill performance • Level/qualifier distributions • Learning trends by function</p>
                     <br>
-                    <p>🎙️ You can ask by voice and play responses aloud, and when you request exports I can provide Excel or PPTX downloads.</p>
+                    <p>🎙️ You can ask by voice and play responses aloud. When you request exports I can provide Excel or PPTX downloads with filters.</p>
                 </div>
             </div>
             
@@ -523,6 +577,24 @@
             </div>
             
             <div class="chat-input-container">
+                <div class="insight-highlights">
+                    <div class="insight-card">
+                        <span>Issuer Lens</span>
+                        Compare issuer performance and level mix.
+                    </div>
+                    <div class="insight-card">
+                        <span>Certification Pulse</span>
+                        Track certification status, completion, and recency.
+                    </div>
+                    <div class="insight-card">
+                        <span>Skill Heatmap</span>
+                        Surface high-demand skills and gaps by function.
+                    </div>
+                    <div class="insight-card">
+                        <span>Executive Summary</span>
+                        KPIs, trends, risks, and recommended actions.
+                    </div>
+                </div>
                 <!-- Example Queries -->
                 <div class="examples-section">
                     <div class="example-query" onclick="fillExample('How many employees completed Level 2?')">
@@ -536,6 +608,12 @@
                     </div>
                     <div class="example-query" onclick="fillExample('Which issuer has the most Level 1 employees?')">
                         Top Level 1 issuer?
+                    </div>
+                    <div class="example-query" onclick="fillExample('Which skills are trending by Wipro function?')">
+                        Trending skills?
+                    </div>
+                    <div class="example-query" onclick="fillExample('Show certification status for Azure Data certifications')">
+                        Certification status?
                     </div>
                 </div>
                 
@@ -554,6 +632,9 @@
                         🚀
                     </button>
                 </form>
+                <div class="voice-status" id="voice-status">
+                    🎙️ Voice ready. Click the mic to start recording.
+                </div>
             </div>
         </div>
     </div>
@@ -724,14 +805,27 @@
                 if (data.success && data.transcript) {
                     hideTyping();
                     await handleUserMessage(data.transcript);
+                    setVoiceStatus('Voice ready. Click the mic to start recording.', 'info');
                 } else {
                     addMessage(data.error || 'Voice transcription failed.', false, null, 'Error', true);
+                    setVoiceStatus('Voice transcription failed. Try again.', 'error');
                     hideTyping();
                 }
             } catch (error) {
                 addMessage('Voice transcription failed. Please try again.', false, null, 'Error', true);
+                setVoiceStatus('Voice transcription failed. Try again.', 'error');
                 hideTyping();
             }
+        }
+
+        function setVoiceStatus(message, status = 'info') {
+            const statusEl = document.getElementById('voice-status');
+            statusEl.textContent = message;
+            statusEl.className = `voice-status ${status}`;
+        }
+
+        function isVoiceSupported() {
+            return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
         }
 
         document.getElementById('chat-form').addEventListener('submit', async function(e) {
@@ -769,16 +863,31 @@
                 if (voiceButton._recorder) {
                     voiceButton._recorder.stop();
                 }
+                setVoiceStatus('Transcribing your question...', 'info');
                 return;
             }
 
             try {
+                if (!isVoiceSupported()) {
+                    addMessage('Voice input is not supported in this browser. Please try Chrome or Edge.', false, null, 'Error', true);
+                    setVoiceStatus('Voice input not supported in this browser.', 'error');
+                    voiceButton.disabled = true;
+                    return;
+                }
+
+                if (!window.isSecureContext && location.hostname !== 'localhost') {
+                    addMessage('Microphone access requires HTTPS. Please open this page over a secure connection.', false, null, 'Error', true);
+                    setVoiceStatus('Enable HTTPS to use voice input.', 'error');
+                    return;
+                }
+
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                 voiceButton.dataset.recording = 'true';
                 voiceButton.classList.add('recording');
                 voiceButton._recorder = recorder;
                 const chunks = [];
+                setVoiceStatus('Listening... click the mic again to stop.', 'success');
 
                 recorder.addEventListener('dataavailable', (event) => {
                     if (event.data.size > 0) {
@@ -794,7 +903,16 @@
 
                 recorder.start();
             } catch (error) {
-                addMessage('Microphone access was denied.', false, null, 'Error', true);
+                let errorMessage = 'Microphone access failed. Please try again.';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No microphone detected. Connect a microphone and try again.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = 'Microphone is currently in use by another application.';
+                }
+                addMessage(errorMessage, false, null, 'Error', true);
+                setVoiceStatus(errorMessage, 'error');
                 voiceButton.dataset.recording = 'false';
                 voiceButton.classList.remove('recording');
             }
@@ -802,6 +920,11 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('chat-input').focus();
+            const voiceButton = document.getElementById('chat-voice-btn');
+            if (!isVoiceSupported()) {
+                voiceButton.disabled = true;
+                setVoiceStatus('Voice input is not supported in this browser.', 'error');
+            }
         });
     </script>
 </body>

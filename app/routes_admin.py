@@ -263,6 +263,48 @@ def register_admin_routes(app):
                 filters["issuer"] = issuer
                 break
 
+        skill_candidates = db.session.query(func.distinct(EmployeeRecord.skill)).filter(
+            EmployeeRecord.skill.isnot(None),
+            EmployeeRecord.skill != ''
+        ).all()
+        skills = sorted(
+            [skill[0] for skill in skill_candidates if skill[0]],
+            key=len,
+            reverse=True
+        )
+        for skill in skills:
+            if skill.lower() in message.lower():
+                filters["skill"] = skill
+                break
+
+        assessment_candidates = db.session.query(func.distinct(EmployeeRecord.assessment_name)).filter(
+            EmployeeRecord.assessment_name.isnot(None),
+            EmployeeRecord.assessment_name != ''
+        ).all()
+        assessments = sorted(
+            [assessment[0] for assessment in assessment_candidates if assessment[0]],
+            key=len,
+            reverse=True
+        )
+        for assessment in assessments:
+            if assessment.lower() in message.lower():
+                filters["assessment_name"] = assessment
+                break
+
+        function_candidates = db.session.query(func.distinct(EmployeeRecord.wipro_function)).filter(
+            EmployeeRecord.wipro_function.isnot(None),
+            EmployeeRecord.wipro_function != ''
+        ).all()
+        functions = sorted(
+            [function[0] for function in function_candidates if function[0]],
+            key=len,
+            reverse=True
+        )
+        for function in functions:
+            if function.lower() in message.lower():
+                filters["wipro_function"] = function
+                break
+
         return filters
 
     # --- Auth routes --- #
@@ -427,10 +469,12 @@ STATISTICAL DATA:
 {f"SPECIFIC EMPLOYEE DATA:{employee_data_text}" if employee_data_text else ""}
 
 Instructions:
-- Use the statistical data above for general queries about levels, issuers, distributions
+- Use the statistical data above for general queries about levels, issuers, skills, certifications, qualifiers, and functions
 - Use the specific employee data (if provided) for individual employee queries
 - If asked about a specific employee not in the data, say you need to query the database
 - Provide production-grade analysis with bullet points, KPIs, and next-step insights
+- Offer segmentation options by issuer, certification (assessment), skill, level, qualifier, and Wipro function
+- Highlight standout performers, gaps, and potential actions (enablement, training, hiring, or certification drives)
 - When a user mentions exporting, summarize the filters you interpreted from their request
 
 Answer the user's question below."""
