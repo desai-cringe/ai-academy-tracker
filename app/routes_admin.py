@@ -494,14 +494,22 @@ def register_admin_routes(app):
 
     def _extract_export_filters_from_message(message: str) -> dict:
         filters = {}
+        normalized_message = message.lower()
         level_match = re.search(r"level\s*(\d+)", message, re.IGNORECASE)
         if level_match:
             filters["level"] = f"Level {level_match.group(1)}"
 
-        if "certified" in message.lower():
+        if "certified" in normalized_message:
             filters["qualifier"] = "Certified"
-        elif "trained" in message.lower():
+        elif "trained" in normalized_message:
             filters["qualifier"] = "Trained"
+
+        employee_id_match = re.search(
+            r"(employee\s*id|emp\s*id)\s*[:#]?\s*(\d{4,})",
+            normalized_message
+        )
+        if employee_id_match:
+            filters["employee_id"] = employee_id_match.group(2)
 
         issuer_candidates = db.session.query(func.distinct(EmployeeRecord.issuer)).filter(
             EmployeeRecord.issuer.isnot(None),
@@ -559,7 +567,57 @@ def register_admin_routes(app):
                 filters["wipro_function"] = function
                 break
 
+        date_filters = _extract_date_filters_from_message(message)
+        filters.update(date_filters)
+
         return filters
+
+    def _extract_date_filters_from_message(message: str) -> dict:
+        patterns = [
+            r"between\s+(?P<start>[^,]+?)\s+and\s+(?P<end>[^,]+)",
+            r"from\s+(?P<start>[^,]+?)\s+to\s+(?P<end>[^,]+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                start_date = _safe_parse_date(match.group("start"))
+                end_date = _safe_parse_date(match.group("end"))
+                return _build_date_filter_payload(start_date, end_date)
+
+        explicit_dates = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", message)
+        if len(explicit_dates) >= 2:
+            return _build_date_filter_payload(explicit_dates[0], explicit_dates[1])
+
+        start_match = re.search(
+            r"(after|since|from)\s+(?P<start>[^,]+)",
+            message,
+            re.IGNORECASE
+        )
+        end_match = re.search(
+            r"(before|until|up to)\s+(?P<end>[^,]+)",
+            message,
+            re.IGNORECASE
+        )
+        start_date = _safe_parse_date(start_match.group("start")) if start_match else None
+        end_date = _safe_parse_date(end_match.group("end")) if end_match else None
+        return _build_date_filter_payload(start_date, end_date)
+
+    def _safe_parse_date(raw_value: str):
+        if not raw_value:
+            return None
+        try:
+            parsed = date_parser.parse(raw_value, fuzzy=True)
+            return parsed.date().isoformat()
+        except Exception:
+            return None
+
+    def _build_date_filter_payload(start_date, end_date) -> dict:
+        payload = {}
+        if start_date:
+            payload["start_date"] = start_date
+        if end_date:
+            payload["end_date"] = end_date
+        return payload
 
     # --- Auth routes --- #
 
@@ -850,13 +908,14 @@ Answer the user's question below."""
             export_requested = bool(
                 re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", user_message, re.IGNORECASE)
             )
-            export_filters = _extract_export_filters_from_message(user_message) if export_requested else {}
+            export_filters = _extract_export_filters_from_message(user_message)
+            export_ready = export_requested or bool(export_filters)
             return jsonify({
                 "success": True,
                 "response": response_text,
                 # Updated to reflect the AWS-native model
                 "model_used": "Amazon Nova Pro (Bedrock)",
-                "export_ready": export_requested,
+                "export_ready": export_ready,
                 "export_filters": export_filters
             })
         except Exception as e:
