@@ -729,6 +729,7 @@
                 <a href="/admin">📊 Dashboard</a>
                 <a href="/admin/insights">📈 Insights</a>
                 <a href="/admin/splits">🧩 Splits</a>
+                <a href="/admin/explorer">🧭 Explorer</a>
                 <a href="/admin/upload">📤 Upload</a>
                 <a href="/">🏠 Home</a>
                 <a href="/admin/logout">🚪 Logout</a>
@@ -758,7 +759,7 @@
                     <h3>🎯 Welcome to Your AI Data Assistant!</h3>
                     <p>I'm powered by Amazon Nova Pro (Bedrock) and have access to your current employee learning data. Ask me anything about:</p>
                     <br>
-                    <p>• Employee progress • Issuer, certification, and skill performance • Level/qualifier distributions • Learning trends by function</p>
+                    <p>• Employee progress • Issuer, certification, and skill performance • Level/qualifier distributions • Learning trends by function • Any field like assessment IDs, emails, marks, or valid-till dates</p>
                     <br>
                     <p>🎙️ You can ask by voice and play responses aloud. Filtered questions automatically unlock Excel and PPTX downloads for the same data slice. Ask for a PPT breakdown to get a slide-ready outline.</p>
                     <div class="badge-row">
@@ -828,6 +829,12 @@
                     </div>
                     <div class="example-query" onclick="fillExample('Show certification status for Azure Data certifications')">
                         Certification status?
+                    </div>
+                    <div class="example-query" onclick="fillExample('Find records where email contains @wipro.com')">
+                        Search by email
+                    </div>
+                    <div class="example-query" onclick="fillExample('Assessment ID 12345 summary with export options')">
+                        Assessment ID summary
                     </div>
                     <div class="example-query" onclick="fillExample('Create a whole records breakdown in PPT')">
                         PPT breakdown
