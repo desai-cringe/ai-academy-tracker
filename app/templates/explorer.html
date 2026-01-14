@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Academy | Data Explorer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1d4ed8;
+            --primary-dark: #1e3a8a;
+            --accent: #7c3aed;
+            --bg: #f4f5fb;
+            --card-bg: #ffffff;
+            --border-soft: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --success: #16a34a;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: linear-gradient(90deg, #001b4f, #003f8c, #6f2dbd);
+            color: #ffffff;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+        }
+
+        .top-bar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .brand h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .brand span {
+            font-size: 0.8rem;
+            opacity: 0.85;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 0.85rem;
+        }
+
+        .nav-links span {
+            margin-right: 0.5rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.06);
+            font-weight: 500;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+        }
+
+        main {
+            max-width: 1400px;
+            margin: 1.8rem auto 3rem;
+            padding: 0 1.5rem;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .hero-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(124, 58, 237, 0.1));
+            border-radius: 18px;
+            padding: 1.5rem;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .hero-card h2 {
+            font-size: 1.6rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .hero-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .hero-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .hero-badge {
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(30, 64, 175, 0.12);
+            color: #1e3a8a;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .filter-panel {
+            background: var(--card-bg);
+            border-radius: 18px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-soft);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+            margin-bottom: 2rem;
+        }
+
+        .filter-panel h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .filter-panel p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .filter-field label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .filter-field input,
+        .filter-field select {
+            padding: 0.6rem 0.7rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-soft);
+            font-size: 0.9rem;
+            background: #fff;
+        }
+
+        .filter-actions {
+            margin-top: 1.3rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .btn {
+            border: none;
+            padding: 0.65rem 1.1rem;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            background: rgba(15, 23, 42, 0.05);
+            color: var(--text-main);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(15, 23, 42, 0.1);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .summary-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid var(--border-soft);
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .summary-card span {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        .summary-card h4 {
+            font-size: 1.6rem;
+            margin-top: 0.35rem;
+        }
+
+        .summary-card p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.4rem;
+        }
+
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        .insight-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.2rem;
+            border: 1px solid var(--border-soft);
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .insight-card h4 {
+            font-size: 1rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .chart-panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.2rem;
+            border: 1px solid var(--border-soft);
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .chart-panel h4 {
+            font-size: 1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .records-panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.3rem;
+            border: 1px solid var(--border-soft);
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .records-panel h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .records-panel p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.8rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th, td {
+            padding: 0.65rem 0.55rem;
+            border-bottom: 1px solid var(--border-soft);
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .export-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+
+        .export-link {
+            padding: 0.5rem 0.9rem;
+            border-radius: 999px;
+            background: rgba(30, 64, 175, 0.1);
+            color: #1e3a8a;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid rgba(30, 64, 175, 0.2);
+        }
+
+        .export-link:hover {
+            background: rgba(30, 64, 175, 0.18);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(15, 118, 110, 0.12);
+            color: #0f766e;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-note {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="top-bar-inner">
+            <div class="brand">
+                <h1>AI Academy Data Explorer</h1>
+                <span>Precision search, time-series insights, and export-ready reporting</span>
+            </div>
+            <div class="nav-links">
+                <span>Welcome, {{ username }}</span>
+                <a href="/admin">Dashboard</a>
+                <a href="/admin/upload">Upload</a>
+                <a href="/admin/insights">Insights</a>
+                <a href="/admin/splits">Splits</a>
+                <a href="/admin/chat">AI Chat</a>
+                <a href="/admin/explorer">Explorer</a>
+                <a href="/admin/logout">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <main>
+        <section class="hero">
+            <div class="hero-card">
+                <h2>Enterprise search across every column</h2>
+                <p>Filter by any header, cross-tabulate certification data, and track completion momentum with professional-grade visuals.</p>
+                <div class="hero-badges">
+                    <span class="hero-badge">Universal field search</span>
+                    <span class="hero-badge">Time-series completion</span>
+                    <span class="hero-badge">Executive-ready exports</span>
+                </div>
+            </div>
+            <div class="hero-card">
+                <h2>Export-ready insights</h2>
+                <p>Download PPTX or Excel using the same filters applied to your analysis. Perfect for leadership reviews.</p>
+                <div class="hero-badges">
+                    <span class="hero-badge">PPTX storyteller</span>
+                    <span class="hero-badge">Spreadsheet-ready</span>
+                    <span class="hero-badge">Filtered snapshots</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="filter-panel">
+            <h3>Search & Filters</h3>
+            <p>Use a primary column search or combine with advanced filters for precision targeting.</p>
+            <div class="filters-grid">
+                <div class="filter-field">
+                    <label for="search-column">Search column</label>
+                    <select id="search-column">
+                        <option value="">Select column</option>
+                        {% for column in columns %}
+                        <option value="{{ column.value }}">{{ column.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field">
+                    <label for="search-value">Search value</label>
+                    <input type="text" id="search-value" placeholder="e.g., john.doe@domain.com">
+                </div>
+                <div class="filter-field">
+                    <label for="level">Level</label>
+                    <input type="text" id="level" placeholder="Level 1">
+                </div>
+                <div class="filter-field">
+                    <label for="issuer">Issuer</label>
+                    <input type="text" id="issuer" placeholder="Microsoft">
+                </div>
+                <div class="filter-field">
+                    <label for="qualifier">Qualifier</label>
+                    <input type="text" id="qualifier" placeholder="Certified">
+                </div>
+                <div class="filter-field">
+                    <label for="skill">Skill</label>
+                    <input type="text" id="skill" placeholder="Azure Data">
+                </div>
+                <div class="filter-field">
+                    <label for="assessment-name">Assessment name</label>
+                    <input type="text" id="assessment-name" placeholder="DP-203">
+                </div>
+                <div class="filter-field">
+                    <label for="employee-id">Employee ID</label>
+                    <input type="text" id="employee-id" placeholder="123456">
+                </div>
+                <div class="filter-field">
+                    <label for="wipro-function">Wipro function</label>
+                    <input type="text" id="wipro-function" placeholder="Analytics">
+                </div>
+                <div class="filter-field">
+                    <label for="start-date">Completion start date</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div class="filter-field">
+                    <label for="end-date">Completion end date</label>
+                    <input type="date" id="end-date">
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" id="apply-filters">Apply filters</button>
+                <button class="btn btn-ghost" id="reset-filters">Reset</button>
+                <span class="status-note" id="filter-status">Ready</span>
+            </div>
+        </section>
+
+        <section class="summary-grid">
+            <div class="summary-card">
+                <span>Total records</span>
+                <h4 id="total-records">0</h4>
+                <p>Filtered entries in scope</p>
+            </div>
+            <div class="summary-card">
+                <span>Unique employees</span>
+                <h4 id="unique-employees">0</h4>
+                <p>Distinct workforce coverage</p>
+            </div>
+            <div class="summary-card">
+                <span>Completion rate</span>
+                <h4 id="completion-rate">0%</h4>
+                <p>Records with completion dates</p>
+            </div>
+            <div class="summary-card">
+                <span>Certified vs Trained</span>
+                <h4 id="certified-count">0</h4>
+                <p id="trained-count">0 trained</p>
+            </div>
+        </section>
+
+        <section class="insights-grid">
+            <div class="insight-card">
+                <h4>Top skill focus</h4>
+                <p class="pill" id="top-skill">N/A</p>
+            </div>
+            <div class="insight-card">
+                <h4>Leading issuer</h4>
+                <p class="pill" id="top-issuer">N/A</p>
+            </div>
+            <div class="insight-card">
+                <h4>Dominant function</h4>
+                <p class="pill" id="top-function">N/A</p>
+            </div>
+        </section>
+
+        <section class="insights-grid">
+            <div class="chart-panel">
+                <h4>Completion timeline</h4>
+                <canvas id="timeline-chart" height="160"></canvas>
+            </div>
+            <div class="chart-panel">
+                <h4>Level distribution</h4>
+                <canvas id="level-chart" height="160"></canvas>
+            </div>
+            <div class="chart-panel">
+                <h4>Qualifier mix</h4>
+                <canvas id="qualifier-chart" height="160"></canvas>
+            </div>
+        </section>
+
+        <section class="records-panel">
+            <div class="export-bar">
+                <a class="export-link" id="export-excel" href="#">⬇️ Excel export</a>
+                <a class="export-link" id="export-pptx" href="#">📊 PPTX export</a>
+            </div>
+            <h3>Record preview</h3>
+            <p>Showing the first 100 records for performance. Export for full results.</p>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Assessment</th>
+                            <th>Level</th>
+                            <th>Qualifier</th>
+                            <th>Completion</th>
+                            <th>Issuer</th>
+                            <th>Skill</th>
+                            <th>Wipro Function</th>
+                        </tr>
+                    </thead>
+                    <tbody id="records-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let timelineChart = null;
+        let levelChart = null;
+        let qualifierChart = null;
+
+        function buildParams() {
+            const params = new URLSearchParams();
+            const fields = {
+                search_column: document.getElementById('search-column').value,
+                search_value: document.getElementById('search-value').value.trim(),
+                level: document.getElementById('level').value.trim(),
+                issuer: document.getElementById('issuer').value.trim(),
+                qualifier: document.getElementById('qualifier').value.trim(),
+                skill: document.getElementById('skill').value.trim(),
+                assessment_name: document.getElementById('assessment-name').value.trim(),
+                employee_id: document.getElementById('employee-id').value.trim(),
+                wipro_function: document.getElementById('wipro-function').value.trim(),
+                start_date: document.getElementById('start-date').value,
+                end_date: document.getElementById('end-date').value
+            };
+
+            Object.entries(fields).forEach(([key, value]) => {
+                if (value) {
+                    params.append(key, value);
+                }
+            });
+            return params;
+        }
+
+        function updateExportLinks(filters) {
+            const params = new URLSearchParams(filters || {});
+            document.getElementById('export-excel').href = `/admin/exports?format=xlsx&${params.toString()}`;
+            document.getElementById('export-pptx').href = `/admin/exports?format=pptx&${params.toString()}`;
+        }
+
+        function renderChart(chartRef, ctx, type, labels, data, label, color) {
+            if (chartRef) {
+                chartRef.destroy();
+            }
+            return new Chart(ctx, {
+                type,
+                data: {
+                    labels,
+                    datasets: [{
+                        label,
+                        data,
+                        backgroundColor: color,
+                        borderColor: color,
+                        borderWidth: 2,
+                        tension: 0.35,
+                        fill: type === 'line'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderData(payload) {
+            document.getElementById('total-records').textContent = payload.totals.records || 0;
+            document.getElementById('unique-employees').textContent = payload.totals.unique_employees || 0;
+            document.getElementById('completion-rate').textContent = `${payload.totals.completion_rate || 0}%`;
+            document.getElementById('certified-count').textContent = payload.totals.certified || 0;
+            document.getElementById('trained-count').textContent = `${payload.totals.trained || 0} trained`;
+
+            document.getElementById('top-skill').textContent = `${payload.highlights.top_skill.label} (${payload.highlights.top_skill.count})`;
+            document.getElementById('top-issuer').textContent = `${payload.highlights.top_issuer.label} (${payload.highlights.top_issuer.count})`;
+            document.getElementById('top-function').textContent = `${payload.highlights.top_function.label} (${payload.highlights.top_function.count})`;
+
+            const timelineCtx = document.getElementById('timeline-chart');
+            timelineChart = renderChart(
+                timelineChart,
+                timelineCtx,
+                'line',
+                payload.time_series.labels,
+                payload.time_series.counts,
+                'Completions',
+                'rgba(59, 130, 246, 0.6)'
+            );
+
+            const levelCtx = document.getElementById('level-chart');
+            levelChart = renderChart(
+                levelChart,
+                levelCtx,
+                'bar',
+                payload.level_distribution.labels,
+                payload.level_distribution.counts,
+                'Levels',
+                'rgba(124, 58, 237, 0.7)'
+            );
+
+            const qualifierCtx = document.getElementById('qualifier-chart');
+            qualifierChart = renderChart(
+                qualifierChart,
+                qualifierCtx,
+                'doughnut',
+                payload.qualifier_distribution.labels,
+                payload.qualifier_distribution.counts,
+                'Qualifiers',
+                ['#2563eb', '#7c3aed', '#f59e0b', '#22c55e', '#94a3b8']
+            );
+
+            const recordsBody = document.getElementById('records-body');
+            recordsBody.innerHTML = '';
+            if (!payload.records.length) {
+                recordsBody.innerHTML = '<tr><td colspan="10">No records found for the current filters.</td></tr>';
+                return;
+            }
+            payload.records.forEach((record) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.employee_id || '-'}</td>
+                    <td>${record.name || '-'}</td>
+                    <td>${record.email || '-'}</td>
+                    <td>${record.assessment_name || '-'}</td>
+                    <td>${record.level || '-'}</td>
+                    <td>${record.qualifier || '-'}</td>
+                    <td>${record.final_completion_date || '-'}</td>
+                    <td>${record.issuer || '-'}</td>
+                    <td>${record.skill || '-'}</td>
+                    <td>${record.wipro_function || '-'}</td>
+                `;
+                recordsBody.appendChild(row);
+            });
+        }
+
+        async function fetchExplorerData() {
+            const status = document.getElementById('filter-status');
+            status.textContent = 'Loading...';
+            try {
+                const params = buildParams();
+                const response = await fetch(`/admin/explorer-data?${params.toString()}`);
+                const data = await response.json();
+                if (!data.success) {
+                    status.textContent = data.error || 'Unable to load data';
+                    return;
+                }
+                renderData(data);
+                updateExportLinks(data.filters || {});
+                status.textContent = `Showing ${data.totals.records} records`;
+            } catch (error) {
+                console.error(error);
+                status.textContent = 'Error loading data';
+            }
+        }
+
+        document.getElementById('apply-filters').addEventListener('click', fetchExplorerData);
+        document.getElementById('reset-filters').addEventListener('click', () => {
+            document.getElementById('search-column').value = '';
+            document.getElementById('search-value').value = '';
+            document.getElementById('level').value = '';
+            document.getElementById('issuer').value = '';
+            document.getElementById('qualifier').value = '';
+            document.getElementById('skill').value = '';
+            document.getElementById('assessment-name').value = '';
+            document.getElementById('employee-id').value = '';
+            document.getElementById('wipro-function').value = '';
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
+            fetchExplorerData();
+        });
+
+        fetchExplorerData();
+    </script>
+</body>
+</html>

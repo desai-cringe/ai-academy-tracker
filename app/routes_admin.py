@@ -93,6 +93,24 @@ def register_admin_routes(app):
             return f(*args, **kwargs)
         return decorated_function
 
+    SEARCHABLE_COLUMNS = {
+        "assessment_id": ("Assessment ID", EmployeeRecord.assessment_id),
+        "assessment_name": ("Assessment Name", EmployeeRecord.assessment_name),
+        "name": ("Employee Name", EmployeeRecord.name),
+        "email": ("Email", EmployeeRecord.email),
+        "employee_id": ("Employee ID", EmployeeRecord.employee_id),
+        "final_completion_date": ("Completion Date", EmployeeRecord.final_completion_date),
+        "issuer": ("Issuer", EmployeeRecord.issuer),
+        "level": ("Level", EmployeeRecord.level),
+        "marks": ("Marks", EmployeeRecord.marks),
+        "qualifier": ("Qualifier", EmployeeRecord.qualifier),
+        "skill": ("Skill", EmployeeRecord.skill),
+        "skill_id": ("Skill ID", EmployeeRecord.skill_id),
+        "valid_till": ("Valid Till", EmployeeRecord.valid_till),
+        "wipro_function": ("Wipro Function", EmployeeRecord.wipro_function),
+    }
+    EXACT_MATCH_COLUMNS = {"employee_id", "assessment_id", "skill_id"}
+
     def _normalize_export_filters(source: dict) -> dict:
         filters = {
             "level": source.get("level", "").strip(),
@@ -101,9 +119,17 @@ def register_admin_routes(app):
             "skill": source.get("skill", "").strip(),
             "assessment_name": source.get("assessment_name", "").strip(),
             "employee_id": source.get("employee_id", "").strip(),
+            "assessment_id": source.get("assessment_id", "").strip(),
+            "skill_id": source.get("skill_id", "").strip(),
+            "name": source.get("name", "").strip(),
+            "email": source.get("email", "").strip(),
+            "marks": source.get("marks", "").strip(),
+            "valid_till": source.get("valid_till", "").strip(),
             "wipro_function": source.get("wipro_function", "").strip(),
             "start_date": source.get("start_date", "").strip(),
             "end_date": source.get("end_date", "").strip(),
+            "search_column": source.get("search_column", "").strip(),
+            "search_value": source.get("search_value", "").strip(),
         }
         return {key: value for key, value in filters.items() if value}
 
@@ -120,8 +146,28 @@ def register_admin_routes(app):
             query = query.filter(EmployeeRecord.assessment_name.ilike(f"%{filters['assessment_name']}%"))
         if filters.get("employee_id"):
             query = query.filter(EmployeeRecord.employee_id == filters["employee_id"])
+        if filters.get("assessment_id"):
+            query = query.filter(EmployeeRecord.assessment_id == filters["assessment_id"])
+        if filters.get("skill_id"):
+            query = query.filter(EmployeeRecord.skill_id == filters["skill_id"])
+        if filters.get("name"):
+            query = query.filter(EmployeeRecord.name.ilike(f"%{filters['name']}%"))
+        if filters.get("email"):
+            query = query.filter(EmployeeRecord.email.ilike(f"%{filters['email']}%"))
+        if filters.get("marks"):
+            query = query.filter(EmployeeRecord.marks.ilike(f"%{filters['marks']}%"))
+        if filters.get("valid_till"):
+            query = query.filter(EmployeeRecord.valid_till.ilike(f"%{filters['valid_till']}%"))
         if filters.get("wipro_function"):
             query = query.filter(EmployeeRecord.wipro_function.ilike(f"%{filters['wipro_function']}%"))
+        if filters.get("search_column") and filters.get("search_value"):
+            column_key = filters["search_column"]
+            if column_key in SEARCHABLE_COLUMNS:
+                column = SEARCHABLE_COLUMNS[column_key][1]
+                if column_key in EXACT_MATCH_COLUMNS:
+                    query = query.filter(column == filters["search_value"])
+                else:
+                    query = query.filter(column.ilike(f"%{filters['search_value']}%"))
         return query
 
     def _filter_records_by_date(records, filters: dict):
@@ -148,6 +194,153 @@ def register_admin_routes(app):
                 continue
             filtered.append(record)
         return filtered
+
+    def _build_explorer_payload(records, filters: dict) -> dict:
+        total_records = len(records)
+        unique_employees = len({
+            record.employee_id
+            for record in records
+            if record.employee_id
+        })
+        completion_count = sum(1 for record in records if record.final_completion_date)
+        completion_rate = round(
+            (completion_count / total_records) * 100,
+            1
+        ) if total_records else 0
+
+        level_counts = {}
+        qualifier_counts = {}
+        skill_counts = {}
+        issuer_counts = {}
+        function_counts = {}
+        time_buckets = {}
+
+        for record in records:
+            level = (record.level or "Unspecified").strip() or "Unspecified"
+            qualifier = (record.qualifier or "Unspecified").strip() or "Unspecified"
+            skill = (record.skill or "Unspecified").strip() or "Unspecified"
+            issuer = (record.issuer or "Unspecified").strip() or "Unspecified"
+            function = (record.wipro_function or "Unspecified").strip() or "Unspecified"
+
+            level_counts[level] = level_counts.get(level, 0) + 1
+            qualifier_counts[qualifier] = qualifier_counts.get(qualifier, 0) + 1
+            skill_counts[skill] = skill_counts.get(skill, 0) + 1
+            issuer_counts[issuer] = issuer_counts.get(issuer, 0) + 1
+            function_counts[function] = function_counts.get(function, 0) + 1
+
+            if record.final_completion_date:
+                try:
+                    parsed_date = date_parser.parse(record.final_completion_date)
+                except Exception:
+                    parsed_date = None
+                if parsed_date:
+                    month_key = parsed_date.strftime("%Y-%m")
+                    time_buckets[month_key] = time_buckets.get(month_key, 0) + 1
+
+        def _top_item(counts: dict) -> dict:
+            if not counts:
+                return {"label": "N/A", "count": 0}
+            label, count = max(counts.items(), key=lambda item: item[1])
+            return {"label": label, "count": count}
+
+        timeline_keys = sorted(time_buckets.keys())
+        timeline_labels = [
+            datetime.strptime(key, "%Y-%m").strftime("%b %Y")
+            for key in timeline_keys
+        ]
+        timeline_counts = [time_buckets[key] for key in timeline_keys]
+
+        records_preview = [
+            {
+                "employee_id": record.employee_id,
+                "name": record.name,
+                "email": record.email,
+                "assessment_name": record.assessment_name,
+                "level": record.level,
+                "qualifier": record.qualifier,
+                "final_completion_date": record.final_completion_date,
+                "issuer": record.issuer,
+                "skill": record.skill,
+                "wipro_function": record.wipro_function,
+            }
+            for record in records[:MAX_DISPLAY_RECORDS]
+        ]
+
+        return {
+            "totals": {
+                "records": total_records,
+                "unique_employees": unique_employees,
+                "completion_rate": completion_rate,
+                "certified": qualifier_counts.get("Certified", 0),
+                "trained": qualifier_counts.get("Trained", 0),
+            },
+            "highlights": {
+                "top_skill": _top_item(skill_counts),
+                "top_issuer": _top_item(issuer_counts),
+                "top_function": _top_item(function_counts),
+            },
+            "time_series": {
+                "labels": timeline_labels,
+                "counts": timeline_counts,
+            },
+            "level_distribution": {
+                "labels": list(level_counts.keys()),
+                "counts": list(level_counts.values()),
+            },
+            "qualifier_distribution": {
+                "labels": list(qualifier_counts.keys()),
+                "counts": list(qualifier_counts.values()),
+            },
+            "records": records_preview,
+            "filters": filters,
+        }
+
+    def _build_filtered_summary(records: list) -> str:
+        if not records:
+            return "No matching records were found for the selected filters."
+
+        total_records = len(records)
+        unique_employees = len({
+            record.employee_id
+            for record in records
+            if record.employee_id
+        })
+        level_counts = {}
+        skill_counts = {}
+        issuer_counts = {}
+        for record in records:
+            level = (record.level or "Unspecified").strip() or "Unspecified"
+            skill = (record.skill or "Unspecified").strip() or "Unspecified"
+            issuer = (record.issuer or "Unspecified").strip() or "Unspecified"
+            level_counts[level] = level_counts.get(level, 0) + 1
+            skill_counts[skill] = skill_counts.get(skill, 0) + 1
+            issuer_counts[issuer] = issuer_counts.get(issuer, 0) + 1
+
+        def _top_label(counts: dict) -> str:
+            if not counts:
+                return "N/A"
+            return max(counts.items(), key=lambda item: item[1])[0]
+
+        sample_rows = []
+        for record in records[:5]:
+            sample_rows.append(
+                f"- {record.employee_id or 'Unknown ID'} | "
+                f"{record.name or 'Unknown'} | "
+                f"{record.assessment_name or 'Unknown Assessment'} | "
+                f"{record.level or 'Unknown Level'} | "
+                f"{record.qualifier or 'Unknown Qualifier'}"
+            )
+
+        return (
+            "Filtered database summary:\n"
+            f"- Total records: {total_records}\n"
+            f"- Unique employees: {unique_employees}\n"
+            f"- Top level: {_top_label(level_counts)}\n"
+            f"- Top skill: {_top_label(skill_counts)}\n"
+            f"- Top issuer: {_top_label(issuer_counts)}\n"
+            "Sample records:\n"
+            + "\n".join(sample_rows)
+        )
 
     def _records_to_export_rows(records):
         rows = []
@@ -511,6 +704,46 @@ def register_admin_routes(app):
         if employee_id_match:
             filters["employee_id"] = employee_id_match.group(2)
 
+        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
+        if email_match:
+            filters["email"] = email_match.group(0)
+
+        assessment_id_match = re.search(
+            r"assessment\s*id\s*[:#]?\s*([\w-]+)",
+            normalized_message
+        )
+        if assessment_id_match:
+            filters["assessment_id"] = assessment_id_match.group(1)
+
+        skill_id_match = re.search(
+            r"skill\s*id\s*[:#]?\s*([\w-]+)",
+            normalized_message
+        )
+        if skill_id_match:
+            filters["skill_id"] = skill_id_match.group(1)
+
+        marks_match = re.search(
+            r"marks\s*[:#]?\s*([\w-]+)",
+            normalized_message
+        )
+        if marks_match:
+            filters["marks"] = marks_match.group(1)
+
+        valid_till_match = re.search(
+            r"valid\s*till\s*[:#]?\s*([a-zA-Z0-9\-/]+)",
+            normalized_message
+        )
+        if valid_till_match:
+            filters["valid_till"] = valid_till_match.group(1)
+
+        name_match = re.search(
+            r"(employee\s*name|name)\s*(?:is|:)?\s*([a-zA-Z.'\s-]{2,})",
+            message,
+            re.IGNORECASE
+        )
+        if name_match:
+            filters["name"] = name_match.group(2).strip()
+
         issuer_candidates = db.session.query(func.distinct(EmployeeRecord.issuer)).filter(
             EmployeeRecord.issuer.isnot(None),
             EmployeeRecord.issuer != ''
@@ -566,6 +799,33 @@ def register_admin_routes(app):
             if function.lower() in message.lower():
                 filters["wipro_function"] = function
                 break
+
+        explicit_field_patterns = {
+            "assessment_id": r"assessment\s*id\s*[:=]\s*([\\w-]+)",
+            "assessment_name": r"assessment\s*name\s*[:=]\s*([\\w\\s\\-_.]+)",
+            "name": r"employee\s*name\s*[:=]\s*([a-zA-Z.'\\s-]{2,})",
+            "email": r"email\s*[:=]\s*([\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]+)",
+            "skill": r"skill\s*[:=]\s*([\\w\\s\\-_.]+)",
+            "skill_id": r"skill\s*id\s*[:=]\s*([\\w-]+)",
+            "issuer": r"issuer\s*[:=]\s*([\\w\\s\\-_.]+)",
+            "level": r"level\s*[:=]\s*(\\d+)",
+            "qualifier": r"qualifier\s*[:=]\s*([\\w\\s\\-_.]+)",
+            "wipro_function": r"wipro\\s*function\s*[:=]\s*([\\w\\s\\-_.]+)",
+            "employee_id": r"employee\\s*id\\s*[:=]\s*(\\d+)",
+            "marks": r"marks\\s*[:=]\\s*([\\w\\s\\-_.]+)",
+            "valid_till": r"valid\\s*till\\s*[:=]\\s*([\\w\\s\\-_.]+)",
+        }
+
+        for key, pattern in explicit_field_patterns.items():
+            if key in filters:
+                continue
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                value = match.group(1).strip()
+                if key == "level" and value.isdigit():
+                    filters[key] = f"Level {value}"
+                else:
+                    filters[key] = value
 
         date_filters = _extract_date_filters_from_message(message)
         filters.update(date_filters)
@@ -736,6 +996,42 @@ def register_admin_routes(app):
             logger.error(f"❌ Insights page error: {e}")
             return f"Insights page error: {str(e)}", 500
 
+    @app.route('/admin/explorer')
+    @login_required
+    def admin_explorer():
+        """Professional search and analytics explorer."""
+        try:
+            columns = [
+                {"value": key, "label": label}
+                for key, (label, _) in SEARCHABLE_COLUMNS.items()
+            ]
+            return render_template(
+                'explorer.html',
+                username=session.get('username'),
+                columns=columns
+            )
+        except Exception as e:
+            logger.error(f"❌ Explorer page error: {e}")
+            return f"Explorer page error: {str(e)}", 500
+
+    @app.route('/admin/explorer-data')
+    @login_required
+    def admin_explorer_data():
+        """JSON data for the explorer search page."""
+        try:
+            filters = _normalize_export_filters(request.args)
+            query = _apply_export_filters(db.session.query(EmployeeRecord), filters)
+            records = query.all()
+            records = _filter_records_by_date(records, filters)
+            payload = _build_explorer_payload(records, filters)
+            return jsonify({
+                "success": True,
+                **payload
+            })
+        except Exception as e:
+            logger.error(f"Explorer data error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route('/admin/splits')
     @login_required
     def admin_splits():
@@ -885,16 +1181,37 @@ def register_admin_routes(app):
                                 f"Issuer: {rec.issuer}, Valid Till: {rec.valid_till}\n"
                             )
 
+            export_filters = _extract_export_filters_from_message(user_message)
+            filtered_summary = ""
+            if export_filters:
+                query = _apply_export_filters(db.session.query(EmployeeRecord), export_filters)
+                filtered_records = query.all()
+                filtered_records = _filter_records_by_date(filtered_records, export_filters)
+                filtered_summary = _build_filtered_summary(filtered_records)
+
+            employee_block = (
+                f"SPECIFIC EMPLOYEE DATA:{employee_data_text}"
+                if employee_data_text
+                else ""
+            )
+            filtered_block = (
+                f"FILTERED DATABASE SNAPSHOT:\n{filtered_summary}"
+                if filtered_summary
+                else ""
+            )
             system_prompt = f"""You are an AI assistant for the AI Academy Tracker system.
 
 STATISTICAL DATA:
 {kb_text}
 
-{f"SPECIFIC EMPLOYEE DATA:{employee_data_text}" if employee_data_text else ""}
+{employee_block}
+{filtered_block}
 
 Instructions:
 - Use the statistical data above for general queries about levels, issuers, skills, certifications, qualifiers, and functions
 - Use the specific employee data (if provided) for individual employee queries
+- The database includes: assessment_id, assessment_name, name, email, employee_id, final_completion_date, issuer, level, marks, qualifier, skill, skill_id, valid_till, wipro_function
+- If filter context is provided, summarize it with KPIs and grounded insights
 - If asked about a specific employee not in the data, say you need to query the database
 - Provide production-grade analysis with bullet points, KPIs, and next-step insights
 - Offer segmentation options by issuer, certification (assessment), skill, level, qualifier, and Wipro function
@@ -908,7 +1225,6 @@ Answer the user's question below."""
             export_requested = bool(
                 re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", user_message, re.IGNORECASE)
             )
-            export_filters = _extract_export_filters_from_message(user_message)
             export_ready = export_requested or bool(export_filters)
             return jsonify({
                 "success": True,
