@@ -111,14 +111,23 @@ def register_admin_routes(app):
     }
     EXACT_MATCH_COLUMNS = {"employee_id", "assessment_id", "skill_id"}
 
+    def _parse_multi_values(raw_value: str) -> list:
+        if not raw_value:
+            return []
+        tokens = re.split(r"[\s,;]+", raw_value.strip())
+        return [token for token in tokens if token]
+
     def _normalize_export_filters(source: dict) -> dict:
+        employee_id_raw = source.get("employee_id", "").strip()
+        employee_ids = _parse_multi_values(employee_id_raw)
         filters = {
             "level": source.get("level", "").strip(),
             "issuer": source.get("issuer", "").strip(),
             "qualifier": source.get("qualifier", "").strip(),
             "skill": source.get("skill", "").strip(),
             "assessment_name": source.get("assessment_name", "").strip(),
-            "employee_id": source.get("employee_id", "").strip(),
+            "employee_id": employee_ids[0] if len(employee_ids) == 1 else "",
+            "employee_ids": employee_ids if len(employee_ids) > 1 else [],
             "assessment_id": source.get("assessment_id", "").strip(),
             "skill_id": source.get("skill_id", "").strip(),
             "name": source.get("name", "").strip(),
@@ -144,8 +153,14 @@ def register_admin_routes(app):
             query = query.filter(EmployeeRecord.skill.ilike(f"%{filters['skill']}%"))
         if filters.get("assessment_name"):
             query = query.filter(EmployeeRecord.assessment_name.ilike(f"%{filters['assessment_name']}%"))
+        if filters.get("employee_ids"):
+            query = query.filter(EmployeeRecord.employee_id.in_(filters["employee_ids"]))
         if filters.get("employee_id"):
-            query = query.filter(EmployeeRecord.employee_id == filters["employee_id"])
+            employee_ids = _parse_multi_values(filters["employee_id"])
+            if len(employee_ids) > 1:
+                query = query.filter(EmployeeRecord.employee_id.in_(employee_ids))
+            else:
+                query = query.filter(EmployeeRecord.employee_id == filters["employee_id"])
         if filters.get("assessment_id"):
             query = query.filter(EmployeeRecord.assessment_id == filters["assessment_id"])
         if filters.get("skill_id"):
@@ -680,6 +695,86 @@ def register_admin_routes(app):
             issuer_chart_data,
         )
 
+        employee_ids = list(filters.get("employee_ids", []))
+        if filters.get("employee_id"):
+            employee_ids.append(filters["employee_id"])
+
+        def _employee_snapshot(emp_id: str, emp_records: list) -> dict:
+            level_counts = {}
+            skill_counts = {}
+            issuer_counts = {}
+            completion_dates = []
+            for rec in emp_records:
+                if rec.level:
+                    level_counts[rec.level] = level_counts.get(rec.level, 0) + 1
+                if rec.skill:
+                    skill_counts[rec.skill] = skill_counts.get(rec.skill, 0) + 1
+                if rec.issuer:
+                    issuer_counts[rec.issuer] = issuer_counts.get(rec.issuer, 0) + 1
+                if rec.final_completion_date:
+                    try:
+                        completion_dates.append(date_parser.parse(rec.final_completion_date))
+                    except Exception:
+                        continue
+
+            def _top_item(counts: dict) -> str:
+                if not counts:
+                    return "N/A"
+                return max(counts.items(), key=lambda item: item[1])[0]
+
+            latest_completion = max(completion_dates).strftime("%Y-%m-%d") if completion_dates else "N/A"
+            return {
+                "employee_id": emp_id,
+                "records": len(emp_records),
+                "top_level": _top_item(level_counts),
+                "top_skill": _top_item(skill_counts),
+                "top_issuer": _top_item(issuer_counts),
+                "latest_completion": latest_completion,
+            }
+
+        employee_summaries = []
+        for emp_id in employee_ids:
+            emp_records = [rec for rec in records if rec.employee_id == emp_id]
+            if not emp_records:
+                continue
+            summary = _employee_snapshot(emp_id, emp_records)
+            employee_summaries.append(summary)
+            emp_slide = prs.slides.add_slide(prs.slide_layouts[5])
+            emp_slide.shapes.title.text = f"Employee {emp_id} Snapshot"
+            emp_box = emp_slide.shapes.add_textbox(Inches(0.7), Inches(1.4), Inches(8.5), Inches(3.5))
+            emp_frame = emp_box.text_frame
+            emp_frame.word_wrap = True
+            emp_frame.text = f"Total Records: {summary['records']}"
+            for line in [
+                f"Top Level: {summary['top_level']}",
+                f"Top Skill: {summary['top_skill']}",
+                f"Top Issuer: {summary['top_issuer']}",
+                f"Latest Completion: {summary['latest_completion']}",
+            ]:
+                paragraph = emp_frame.add_paragraph()
+                paragraph.text = line
+                paragraph.font.size = Pt(18)
+
+        if len(employee_summaries) > 1:
+            compare_slide = prs.slides.add_slide(prs.slide_layouts[5])
+            compare_slide.shapes.title.text = "Employee Comparison"
+            rows = len(employee_summaries) + 1
+            cols = 5
+            table = compare_slide.shapes.add_table(
+                rows, cols, Inches(0.4), Inches(1.4), Inches(9.1), Inches(4.8)
+            ).table
+            table.cell(0, 0).text = "Employee ID"
+            table.cell(0, 1).text = "Records"
+            table.cell(0, 2).text = "Top Level"
+            table.cell(0, 3).text = "Top Skill"
+            table.cell(0, 4).text = "Latest Completion"
+            for row_idx, summary in enumerate(employee_summaries, start=1):
+                table.cell(row_idx, 0).text = summary["employee_id"]
+                table.cell(row_idx, 1).text = str(summary["records"])
+                table.cell(row_idx, 2).text = summary["top_level"]
+                table.cell(row_idx, 3).text = summary["top_skill"]
+                table.cell(row_idx, 4).text = summary["latest_completion"]
+
         output = BytesIO()
         prs.save(output)
         output.seek(0)
@@ -697,12 +792,23 @@ def register_admin_routes(app):
         elif "trained" in normalized_message:
             filters["qualifier"] = "Trained"
 
-        employee_id_match = re.search(
-            r"(employee\s*id|emp\s*id)\s*[:#]?\s*(\d{4,})",
+        employee_block = re.search(
+            r"(employee\s*ids?|emp\s*ids?)\s*[:#]?\s*([0-9,\s]+)",
             normalized_message
         )
-        if employee_id_match:
-            filters["employee_id"] = employee_id_match.group(2)
+        if employee_block:
+            employee_ids = re.findall(r"\d{4,}", employee_block.group(2))
+            if len(employee_ids) > 1:
+                filters["employee_ids"] = employee_ids
+            elif employee_ids:
+                filters["employee_id"] = employee_ids[0]
+        else:
+            employee_id_match = re.search(
+                r"(employee\s*id|emp\s*id)\s*[:#]?\s*(\d{4,})",
+                normalized_message
+            )
+            if employee_id_match:
+                filters["employee_id"] = employee_id_match.group(2)
 
         email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
         if email_match:
@@ -799,6 +905,44 @@ def register_admin_routes(app):
             if function.lower() in message.lower():
                 filters["wipro_function"] = function
                 break
+
+        field_match = re.search(
+            r"(?:field|column)\s+(?P<column>[a-zA-Z_\s]+?)\s*(?:is|=|:)\s*(?P<value>[^,]+)",
+            message,
+            re.IGNORECASE
+        )
+        if field_match:
+            column_raw = field_match.group("column").strip().lower().replace("_", " ")
+            value = field_match.group("value").strip()
+            column_lookup = {
+                "employee id": "employee_id",
+                "emp id": "employee_id",
+                "assessment id": "assessment_id",
+                "assessment name": "assessment_name",
+                "employee name": "name",
+                "name": "name",
+                "email": "email",
+                "issuer": "issuer",
+                "level": "level",
+                "qualifier": "qualifier",
+                "skill": "skill",
+                "skill id": "skill_id",
+                "valid till": "valid_till",
+                "wipro function": "wipro_function",
+                "marks": "marks",
+            }
+            column_key = column_lookup.get(column_raw)
+            if column_key:
+                if column_key == "level" and value.isdigit():
+                    filters[column_key] = f"Level {value}"
+                elif column_key == "employee_id":
+                    employee_ids = _parse_multi_values(value)
+                    if len(employee_ids) > 1:
+                        filters["employee_ids"] = employee_ids
+                    elif employee_ids:
+                        filters["employee_id"] = employee_ids[0]
+                else:
+                    filters[column_key] = value
 
         explicit_field_patterns = {
             "assessment_id": r"assessment\s*id\s*[:=]\s*([\\w-]+)",
@@ -978,6 +1122,16 @@ def register_admin_routes(app):
         except Exception as e:
             logger.error(f"❌ Chat page error: {e}")
             return f"Chat page error: {str(e)}", 500
+
+    @app.route('/admin/agentic')
+    @login_required
+    def admin_agentic():
+        """Agentic AI reporting page."""
+        try:
+            return render_template('agentic.html', username=session.get('username'))
+        except Exception as e:
+            logger.error(f"❌ Agentic page error: {e}")
+            return f"Agentic page error: {str(e)}", 500
 
     @app.route('/admin/insights')
     @login_required
