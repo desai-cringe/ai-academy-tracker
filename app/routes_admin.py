@@ -54,6 +54,8 @@ from .services import (
     export_rds_to_csv_snapshot,
     _deduplicate_cleaned_dataframe,
     CSV_EXPORT_COLUMNS,
+    generate_certificates_for_dataframe,
+    generate_certificates_for_rds,
 )
 
 logger = logging.getLogger(__name__)
@@ -1689,6 +1691,8 @@ Answer the user's question below."""
                 duplicates_skipped = 0
                 duplicates_total = int(duplicates_in_file)
                 s3_error = None
+                certificate_stats = {'created': 0, 'skipped': 0, 'failed': 0}
+                certificate_error = None
 
                 if mode == 'append':
                     df_for_db, duplicates_skipped = filter_new_records_for_append(df_cleaned, existing_keys)
@@ -1732,6 +1736,17 @@ Answer the user's question below."""
                     )
 
                     if rds_result:
+                        certificate_stats, certificate_error = generate_certificates_for_dataframe(
+                            df_for_db,
+                            already_mapped=True
+                        )
+                        log_step(
+                            "Certificate generation completed for append XLSX "
+                            f"(created={certificate_stats['created']}, "
+                            f"skipped={certificate_stats['skipped']}, "
+                            f"failed={certificate_stats['failed']}, "
+                            f"error={certificate_error})"
+                        )
                         s3_result, s3_error = export_rds_to_csv_snapshot()
                         log_step(
                             f"export_rds_to_csv_snapshot completed "
@@ -1748,6 +1763,15 @@ Answer the user's question below."""
                         f"save_cleaned_data_to_rds completed "
                         f"(success={rds_result}, error={rds_error})"
                     )
+                    if rds_result:
+                        certificate_stats, certificate_error = generate_certificates_for_dataframe(df_cleaned)
+                        log_step(
+                            "Certificate generation completed for replace XLSX "
+                            f"(created={certificate_stats['created']}, "
+                            f"skipped={certificate_stats['skipped']}, "
+                            f"failed={certificate_stats['failed']}, "
+                            f"error={certificate_error})"
+                        )
 
                 # Build enhanced KB from RDS
                 kb_content, record_count, issuer_count, kb_error = create_enhanced_knowledge_base_from_rds()
@@ -1806,6 +1830,13 @@ Answer the user's question below."""
                     'rds_success': bool(rds_result),
                     's3_success': bool(s3_result)
                 }
+                if certificate_stats:
+                    result_stats['certificates'] = {
+                        'created': int(certificate_stats.get('created', 0)),
+                        'skipped': int(certificate_stats.get('skipped', 0)),
+                        'failed': int(certificate_stats.get('failed', 0)),
+                        'error': certificate_error
+                    }
 
                 s3_manager.delete_file(s3_key)
                 invalidate_stats_cache()
@@ -1845,6 +1876,8 @@ Answer the user's question below."""
                 duplicates_in_file = 0
                 required_checked = False
                 dedup_keys_in_file: set[str] = set()
+                certificate_stats = {'created': 0, 'skipped': 0, 'failed': 0}
+                certificate_error = None
 
                 # Temp file for building CSV for S3 snapshot (streaming)
                 temp_file = tempfile.NamedTemporaryFile(
@@ -1905,6 +1938,12 @@ Answer the user's question below."""
                             return jsonify({
                                 'error': f'Upload processing failed while saving to database: {rds_error}'
                             })
+                        chunk_cert_stats, chunk_cert_error = generate_certificates_for_dataframe(cleaned_chunk)
+                        certificate_stats['created'] += chunk_cert_stats.get('created', 0)
+                        certificate_stats['skipped'] += chunk_cert_stats.get('skipped', 0)
+                        certificate_stats['failed'] += chunk_cert_stats.get('failed', 0)
+                        if chunk_cert_error and not certificate_error:
+                            certificate_error = chunk_cert_error
 
                         # Append to temp CSV for S3 snapshot
                         cleaned_chunk.to_csv(
@@ -1981,6 +2020,12 @@ Answer the user's question below."""
                         'rds_success': True,
                         's3_success': bool(s3_result)
                     }
+                    result_stats['certificates'] = {
+                        'created': int(certificate_stats.get('created', 0)),
+                        'skipped': int(certificate_stats.get('skipped', 0)),
+                        'failed': int(certificate_stats.get('failed', 0)),
+                        'error': certificate_error
+                    }
 
                     # Cleanup
                     s3_manager.delete_file(s3_key)
@@ -2015,6 +2060,8 @@ Answer the user's question below."""
                 total_cleaned_rows = 0
                 total_duplicates = 0
                 required_checked = False
+                certificate_stats = {'created': 0, 'skipped': 0, 'failed': 0}
+                certificate_error = None
 
                 try:
                     csv_stream = BytesIO(file_content)
@@ -2064,6 +2111,15 @@ Answer the user's question below."""
                             return jsonify({
                                 'error': f'Upload processing failed while saving to database: {rds_error}'
                             })
+                        chunk_cert_stats, chunk_cert_error = generate_certificates_for_dataframe(
+                            deduped_chunk,
+                            already_mapped=True
+                        )
+                        certificate_stats['created'] += chunk_cert_stats.get('created', 0)
+                        certificate_stats['skipped'] += chunk_cert_stats.get('skipped', 0)
+                        certificate_stats['failed'] += chunk_cert_stats.get('failed', 0)
+                        if chunk_cert_error and not certificate_error:
+                            certificate_error = chunk_cert_error
 
                     if total_cleaned_rows == 0:
                         s3_manager.delete_file(s3_key)
@@ -2130,6 +2186,12 @@ Answer the user's question below."""
                         'rds_success': True,
                         's3_success': bool(s3_result)
                     }
+                    result_stats['certificates'] = {
+                        'created': int(certificate_stats.get('created', 0)),
+                        'skipped': int(certificate_stats.get('skipped', 0)),
+                        'failed': int(certificate_stats.get('failed', 0)),
+                        'error': certificate_error
+                    }
 
                     s3_manager.delete_file(s3_key)
                     invalidate_stats_cache()
@@ -2189,6 +2251,29 @@ Answer the user's question below."""
             return jsonify({"success": False, "error": "S3 upload failed"})
         except Exception as e:
             logger.error(f"KB error: {e}")
+            return jsonify({"success": False, "error": str(e)})
+
+    @app.route('/admin/generate-certificates', methods=['POST'])
+    @login_required
+    def generate_certificates():
+        """Generate certificates for every record in the database."""
+        try:
+            logger.info("🎓 Generating certificates for all records in RDS...")
+            counts, error = generate_certificates_for_rds()
+            message = (
+                f"Certificates generated: {counts['created']} created, "
+                f"{counts['skipped']} skipped, {counts['failed']} failed."
+            )
+            if error:
+                logger.warning(f"Certificate generation completed with error: {error}")
+            return jsonify({
+                "success": error is None,
+                "message": message,
+                "counts": counts,
+                "error": error
+            })
+        except Exception as e:
+            logger.error(f"Certificate generation error: {e}")
             return jsonify({"success": False, "error": str(e)})
 
     # --- Stats & chart APIs --- #

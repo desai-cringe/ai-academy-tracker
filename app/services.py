@@ -1,11 +1,14 @@
 # app/services.py
 
-import logging
-import time
-import gc
-import os
-import tempfile
 import csv
+import gc
+import hashlib
+import html
+import logging
+import os
+import re
+import tempfile
+import time
 from collections import Counter
 from datetime import datetime
 from io import StringIO
@@ -57,6 +60,317 @@ CSV_EXPORT_COLUMNS = [
     ('valid_till', 'Valid_Till'),
     ('wipro_function', 'Wipro_Function'),
 ]
+
+CERTIFICATE_S3_PREFIX = 'certificates/'
+
+CERTIFICATE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wipro GenAI Academy Certificate</title>
+  <style>
+    body {{
+      background: #f1f5f9;
+      font-family: "Inter", "Segoe UI", sans-serif;
+      padding: 32px;
+      color: #0f172a;
+    }}
+    .certificate {{
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 8px solid #003f8c;
+      border-radius: 18px;
+      padding: 36px 48px 42px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.15);
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }}
+    .brand {{
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }}
+    .logo {{
+      width: 64px;
+      height: 64px;
+    }}
+    .brand-text h1 {{
+      font-size: 24px;
+      margin: 0;
+      color: #003f8c;
+    }}
+    .brand-text p {{
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: #475569;
+    }}
+    .title {{
+      text-align: center;
+      font-size: 30px;
+      color: #0f172a;
+      margin: 12px 0 6px;
+    }}
+    .subtitle {{
+      text-align: center;
+      font-size: 16px;
+      color: #64748b;
+      margin-bottom: 22px;
+    }}
+    .name {{
+      text-align: center;
+      font-size: 34px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 12px;
+    }}
+    .description {{
+      text-align: center;
+      font-size: 16px;
+      color: #475569;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }}
+    .details {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }}
+    .detail {{
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #f8fafc;
+    }}
+    .detail span {{
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 4px;
+    }}
+    .detail strong {{
+      font-size: 14px;
+      color: #0f172a;
+    }}
+    .footer {{
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 12px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="certificate">
+    <div class="header">
+      <div class="brand">
+        <div class="logo">{logo}</div>
+        <div class="brand-text">
+          <h1>Wipro GenAI Academy</h1>
+          <p>Employee Learning Certificate</p>
+        </div>
+      </div>
+      <div>
+        <strong>{status}</strong>
+      </div>
+    </div>
+    <div class="title">Certificate of {status}</div>
+    <div class="subtitle">This certificate is proudly presented to</div>
+    <div class="name">{employee_name}</div>
+    <div class="description">
+      for successfully completing the <strong>{skill}</strong> learning journey
+      within the <strong>{wipro_function}</strong> function.
+    </div>
+    <div class="details">
+      <div class="detail">
+        <span>Employee ID</span>
+        <strong>{employee_id}</strong>
+      </div>
+      <div class="detail">
+        <span>Skill</span>
+        <strong>{skill}</strong>
+      </div>
+      <div class="detail">
+        <span>Level</span>
+        <strong>{level}</strong>
+      </div>
+      <div class="detail">
+        <span>Status</span>
+        <strong>{status}</strong>
+      </div>
+      <div class="detail">
+        <span>Assessment</span>
+        <strong>{assessment_name}</strong>
+      </div>
+      <div class="detail">
+        <span>Issuer</span>
+        <strong>{issuer}</strong>
+      </div>
+      <div class="detail">
+        <span>Completion Date</span>
+        <strong>{completion_date}</strong>
+      </div>
+      <div class="detail">
+        <span>Certificate ID</span>
+        <strong>{certificate_id}</strong>
+      </div>
+    </div>
+    <div class="footer">
+      <div>Issued on {issued_on}</div>
+      <div>Wipro Internal</div>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+def _sanitize_segment(value: str) -> str:
+    cleaned = re.sub(r'[^A-Za-z0-9]+', '-', value or '').strip('-').lower()
+    return cleaned or 'unknown'
+
+
+def _resolve_training_status(qualifier: str) -> str:
+    if not qualifier:
+        return 'Completed'
+    normalized = qualifier.strip()
+    lowered = normalized.lower()
+    if 'certified' in lowered:
+        return 'Certified'
+    if 'trained' in lowered:
+        return 'Trained'
+    return normalized
+
+
+def _build_wipro_logo_svg() -> str:
+    return """
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-label="Wipro logo">
+  <circle cx="60" cy="60" r="56" fill="#ffffff" stroke="#003f8c" stroke-width="6"/>
+  <circle cx="60" cy="16" r="10" fill="#f97316"/>
+  <circle cx="92" cy="30" r="10" fill="#ec4899"/>
+  <circle cx="104" cy="60" r="10" fill="#6366f1"/>
+  <circle cx="92" cy="90" r="10" fill="#10b981"/>
+  <circle cx="60" cy="104" r="10" fill="#22c55e"/>
+  <circle cx="28" cy="90" r="10" fill="#3b82f6"/>
+  <circle cx="16" cy="60" r="10" fill="#8b5cf6"/>
+  <circle cx="28" cy="30" r="10" fill="#f59e0b"/>
+  <text x="60" y="70" text-anchor="middle" font-size="28" font-family="Inter, sans-serif" fill="#003f8c">W</text>
+</svg>
+""".strip()
+
+
+def _build_certificate_key(record: Dict[str, str]) -> Tuple[str, str]:
+    base = "|".join([
+        str(record.get('employee_id', '') or ''),
+        str(record.get('assessment_id', '') or ''),
+        str(record.get('skill_id', '') or ''),
+        str(record.get('final_completion_date', '') or '')
+    ])
+    digest = hashlib.sha1(base.encode('utf-8')).hexdigest()[:12]
+    employee_segment = _sanitize_segment(record.get('employee_id', 'unknown'))
+    skill_segment = _sanitize_segment(record.get('skill', 'skill'))
+    key = f"{CERTIFICATE_S3_PREFIX}{employee_segment}/{skill_segment}-{digest}.html"
+    return key, digest
+
+
+def _build_certificate_html(record: Dict[str, str], certificate_id: str) -> str:
+    logo = _build_wipro_logo_svg()
+    status = _resolve_training_status(record.get('qualifier', ''))
+    issued_on = datetime.utcnow().strftime('%d %b %Y')
+    values = {
+        'logo': logo,
+        'status': html.escape(status or 'Completed'),
+        'employee_name': html.escape(record.get('name') or 'N/A'),
+        'employee_id': html.escape(record.get('employee_id') or 'N/A'),
+        'skill': html.escape(record.get('skill') or 'N/A'),
+        'level': html.escape(record.get('level') or 'N/A'),
+        'assessment_name': html.escape(record.get('assessment_name') or 'N/A'),
+        'issuer': html.escape(record.get('issuer') or 'N/A'),
+        'completion_date': html.escape(record.get('final_completion_date') or 'N/A'),
+        'wipro_function': html.escape(record.get('wipro_function') or 'N/A'),
+        'certificate_id': html.escape(certificate_id),
+        'issued_on': html.escape(issued_on),
+    }
+    return CERTIFICATE_TEMPLATE.format(**values)
+
+
+def generate_certificates_for_records(records: List[Dict[str, str]]) -> Tuple[Dict[str, int], Optional[str]]:
+    counts = {'created': 0, 'skipped': 0, 'failed': 0}
+    if not records:
+        return counts, None
+    if not s3_manager.s3_client:
+        return counts, "S3 client not available"
+
+    error_message = None
+    for record in records:
+        key, certificate_id = _build_certificate_key(record)
+        if s3_manager.file_exists_in_s3(key):
+            counts['skipped'] += 1
+            continue
+        html_content = _build_certificate_html(record, certificate_id)
+        success, error = s3_manager.write_file_to_s3(key, html_content, content_type='text/html')
+        if success:
+            counts['created'] += 1
+        else:
+            counts['failed'] += 1
+            if not error_message:
+                error_message = error
+
+    return counts, error_message
+
+
+def generate_certificates_for_dataframe(
+    df: pd.DataFrame,
+    *,
+    already_mapped: bool = False
+) -> Tuple[Dict[str, int], Optional[str]]:
+    if df is None or df.empty:
+        return {'created': 0, 'skipped': 0, 'failed': 0}, None
+    if already_mapped:
+        df_for_db = df.copy()
+    else:
+        df_for_db = _map_df_to_db_columns(df)
+    records = df_for_db.fillna("").to_dict(orient='records')
+    return generate_certificates_for_records(records)
+
+
+def generate_certificates_for_rds(batch_size: int = CHUNK_SIZE) -> Tuple[Dict[str, int], Optional[str]]:
+    if not s3_manager.s3_client:
+        return {'created': 0, 'skipped': 0, 'failed': 0}, "S3 client not available"
+
+    counts = {'created': 0, 'skipped': 0, 'failed': 0}
+    error_message = None
+    try:
+        query = db.session.query(EmployeeRecord)
+        for record in query.yield_per(batch_size):
+            record_dict = {col: getattr(record, col, '') for col in APPEND_DEDUP_COLUMNS_DB}
+            key, certificate_id = _build_certificate_key(record_dict)
+            if s3_manager.file_exists_in_s3(key):
+                counts['skipped'] += 1
+                continue
+            html_content = _build_certificate_html(record_dict, certificate_id)
+            success, error = s3_manager.write_file_to_s3(key, html_content, content_type='text/html')
+            if success:
+                counts['created'] += 1
+            else:
+                counts['failed'] += 1
+                if not error_message:
+                    error_message = error
+    except Exception as e:
+        logger.error(f"❌ Error generating certificates from RDS: {e}")
+        return counts, str(e)
+
+    return counts, error_message
 
 # Pandas options and dtypes
 PANDAS_OPTIONS = {
