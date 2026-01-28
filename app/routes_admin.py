@@ -5,6 +5,7 @@ import gc
 import re
 import os
 import tempfile
+import threading
 from io import BytesIO
 import time
 import uuid
@@ -59,6 +60,14 @@ from .services import (
 )
 
 logger = logging.getLogger(__name__)
+
+certificate_generation_lock = threading.Lock()
+certificate_generation_state = {
+    "running": False,
+    "last_counts": None,
+    "last_error": None,
+    "last_finished_at": None,
+}
 
 
 def register_admin_routes(app):
@@ -2309,24 +2318,49 @@ Answer the user's question below."""
     @login_required
     def generate_certificates():
         """Generate certificates for every record in the database."""
-        try:
-            logger.info("🎓 Generating certificates for all records in RDS...")
-            counts, error = generate_certificates_for_rds()
-            message = (
-                f"Certificates generated: {counts['created']} created, "
-                f"{counts['skipped']} skipped, {counts['failed']} failed."
-            )
-            if error:
-                logger.warning(f"Certificate generation completed with error: {error}")
+        if not certificate_generation_lock.acquire(blocking=False):
             return jsonify({
-                "success": error is None,
-                "message": message,
-                "counts": counts,
-                "error": error
-            })
-        except Exception as e:
-            logger.error(f"Certificate generation error: {e}")
-            return jsonify({"success": False, "error": str(e)})
+                "success": False,
+                "error": "Certificate generation is already in progress. Please try again later.",
+            }), 409
+
+        certificate_generation_state.update({
+            "running": True,
+            "last_error": None,
+            "last_finished_at": None,
+        })
+
+        def run_certificate_generation():
+            try:
+                with app.app_context():
+                    logger.info("🎓 Generating certificates for all records in RDS (async)...")
+                    counts, error = generate_certificates_for_rds()
+                    certificate_generation_state["last_counts"] = counts
+                    certificate_generation_state["last_error"] = error
+                    certificate_generation_state["last_finished_at"] = datetime.utcnow().isoformat()
+                    if error:
+                        logger.warning(f"Certificate generation completed with error: {error}")
+                    else:
+                        logger.info(
+                            "✅ Certificate generation completed: %s created, %s skipped, %s failed.",
+                            counts["created"],
+                            counts["skipped"],
+                            counts["failed"],
+                        )
+            except Exception as e:
+                logger.error(f"Certificate generation error: {e}")
+                certificate_generation_state["last_error"] = str(e)
+            finally:
+                certificate_generation_state["running"] = False
+                certificate_generation_lock.release()
+
+        threading.Thread(target=run_certificate_generation, daemon=True).start()
+
+        return jsonify({
+            "success": True,
+            "message": "Certificate generation started. Check back later for results.",
+            "status": "started",
+        }), 202
 
     # --- Stats & chart APIs --- #
 
