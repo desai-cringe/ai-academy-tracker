@@ -326,6 +326,10 @@
                     <canvas id="levelChart"></canvas>
                 </div>
                 <div class="chart-card">
+                    <h4>Issuer Split</h4>
+                    <canvas id="issuerChart"></canvas>
+                </div>
+                <div class="chart-card">
                     <h4>Completion Timeline</h4>
                     <canvas id="timeChart"></canvas>
                 </div>
@@ -344,6 +348,7 @@
 
 <script>
     let levelChart = null;
+    let issuerChart = null;
     let timeChart = null;
 
     function fillPrompt(text) {
@@ -360,6 +365,10 @@
         if (Array.isArray(normalized.employee_ids)) {
             normalized.employee_id = normalized.employee_ids.join(',');
             delete normalized.employee_ids;
+        }
+        if (Array.isArray(normalized.emails)) {
+            normalized.email = normalized.emails.join(',');
+            delete normalized.emails;
         }
         return normalized;
     }
@@ -421,6 +430,14 @@
             data.level_distribution.labels,
             data.level_distribution.counts,
             '#38bdf8'
+        );
+        issuerChart = buildChart(
+            issuerChart,
+            document.getElementById('issuerChart'),
+            'bar',
+            data.issuer_distribution.labels,
+            data.issuer_distribution.counts,
+            '#f97316'
         );
         timeChart = buildChart(
             timeChart,

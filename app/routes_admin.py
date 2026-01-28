@@ -131,6 +131,8 @@ def register_admin_routes(app):
     def _normalize_export_filters(source: dict) -> dict:
         employee_id_raw = source.get("employee_id", "").strip()
         employee_ids = _parse_multi_values(employee_id_raw)
+        email_raw = source.get("email", "").strip()
+        emails = _parse_multi_values(email_raw)
         filters = {
             "level": source.get("level", "").strip(),
             "issuer": source.get("issuer", "").strip(),
@@ -142,7 +144,8 @@ def register_admin_routes(app):
             "assessment_id": source.get("assessment_id", "").strip(),
             "skill_id": source.get("skill_id", "").strip(),
             "name": source.get("name", "").strip(),
-            "email": source.get("email", "").strip(),
+            "email": emails[0] if len(emails) == 1 else "",
+            "emails": emails if len(emails) > 1 else [],
             "marks": source.get("marks", "").strip(),
             "valid_till": source.get("valid_till", "").strip(),
             "wipro_function": source.get("wipro_function", "").strip(),
@@ -178,6 +181,8 @@ def register_admin_routes(app):
             query = query.filter(EmployeeRecord.skill_id == filters["skill_id"])
         if filters.get("name"):
             query = query.filter(EmployeeRecord.name.ilike(f"%{filters['name']}%"))
+        if filters.get("emails"):
+            query = query.filter(EmployeeRecord.email.in_(filters["emails"]))
         if filters.get("email"):
             query = query.filter(EmployeeRecord.email.ilike(f"%{filters['email']}%"))
         if filters.get("marks"):
@@ -313,6 +318,10 @@ def register_admin_routes(app):
                 "labels": list(level_counts.keys()),
                 "counts": list(level_counts.values()),
             },
+            "issuer_distribution": {
+                "labels": list(issuer_counts.keys()),
+                "counts": list(issuer_counts.values()),
+            },
             "qualifier_distribution": {
                 "labels": list(qualifier_counts.keys()),
                 "counts": list(qualifier_counts.values()),
@@ -366,6 +375,54 @@ def register_admin_routes(app):
             f"- Top issuer: {_top_label(issuer_counts)}\n"
             "Sample records:\n"
             + "\n".join(sample_rows)
+        )
+
+    def _summarize_distribution(counts: dict, limit: int = 8) -> str:
+        if not counts:
+            return "N/A"
+        top_items = sorted(counts.items(), key=lambda item: item[1], reverse=True)[:limit]
+        return ", ".join([f"{label} ({count})" for label, count in top_items])
+
+    def _build_employee_insight_snapshot(identifier: str, records: list) -> str:
+        if not records:
+            return f"{identifier}: No records found."
+        level_counts = {}
+        qualifier_counts = {}
+        issuer_counts = {}
+        completion_buckets = {}
+        for record in records:
+            level = (record.level or "Unspecified").strip() or "Unspecified"
+            qualifier = (record.qualifier or "Unspecified").strip() or "Unspecified"
+            issuer = (record.issuer or "Unspecified").strip() or "Unspecified"
+            level_counts[level] = level_counts.get(level, 0) + 1
+            qualifier_counts[qualifier] = qualifier_counts.get(qualifier, 0) + 1
+            issuer_counts[issuer] = issuer_counts.get(issuer, 0) + 1
+            if record.final_completion_date:
+                try:
+                    parsed_date = date_parser.parse(record.final_completion_date)
+                except Exception:
+                    parsed_date = None
+                if parsed_date:
+                    bucket = parsed_date.strftime("%Y-%m")
+                    completion_buckets[bucket] = completion_buckets.get(bucket, 0) + 1
+
+        completion_labels = [
+            datetime.strptime(key, "%Y-%m").strftime("%b %Y")
+            for key in sorted(completion_buckets.keys())
+        ]
+        completion_counts = [completion_buckets[key] for key in sorted(completion_buckets.keys())]
+        completion_summary = (
+            f"{', '.join([f'{label}: {count}' for label, count in zip(completion_labels, completion_counts)])}"
+            if completion_labels else "N/A"
+        )
+
+        return (
+            f"{identifier} Summary:\n"
+            f"- Total records: {len(records)}\n"
+            f"- Level distribution: {_summarize_distribution(level_counts)}\n"
+            f"- Qualified (Trained/Certified): {_summarize_distribution(qualifier_counts)}\n"
+            f"- Issuer split: {_summarize_distribution(issuer_counts)}\n"
+            f"- Completion trendline (monthly): {completion_summary}"
         )
 
     def _build_overall_summary() -> str:
@@ -865,9 +922,13 @@ def register_admin_routes(app):
             if employee_id_match:
                 filters["employee_id"] = employee_id_match.group(2)
 
-        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
-        if email_match:
-            filters["email"] = email_match.group(0)
+        email_matches = re.findall(r"[\w\.-]+@[\w\.-]+\.\w+", message)
+        if email_matches:
+            unique_emails = list(dict.fromkeys(email_matches))
+            if len(unique_emails) > 1:
+                filters["emails"] = unique_emails
+            else:
+                filters["email"] = unique_emails[0]
 
         assessment_id_match = re.search(
             r"assessment\s*id\s*[:#]?\s*([\w-]+)",
@@ -996,6 +1057,12 @@ def register_admin_routes(app):
                         filters["employee_ids"] = employee_ids
                     elif employee_ids:
                         filters["employee_id"] = employee_ids[0]
+                elif column_key == "email":
+                    emails = _parse_multi_values(value)
+                    if len(emails) > 1:
+                        filters["emails"] = emails
+                    elif emails:
+                        filters["email"] = emails[0]
                 else:
                     filters[column_key] = value
 
@@ -1023,8 +1090,24 @@ def register_admin_routes(app):
                 value = match.group(1).strip()
                 if key == "level" and value.isdigit():
                     filters[key] = f"Level {value}"
+                elif key == "email":
+                    emails = _parse_multi_values(value)
+                    if len(emails) > 1:
+                        filters["emails"] = emails
+                    elif emails:
+                        filters["email"] = emails[0]
                 else:
                     filters[key] = value
+
+        if not filters.get("employee_id") and not filters.get("employee_ids"):
+            numeric_tokens = re.findall(r"\b\d{4,}\b", message)
+            comparison_hint = any(keyword in normalized_message for keyword in ["compare", "comparison", "vs"])
+            if numeric_tokens and ("employee" in normalized_message or "emp" in normalized_message or comparison_hint):
+                unique_ids = list(dict.fromkeys(numeric_tokens))
+                if len(unique_ids) > 1:
+                    filters["employee_ids"] = unique_ids
+                else:
+                    filters["employee_id"] = unique_ids[0]
 
         date_filters = _extract_date_filters_from_message(message)
         filters.update(date_filters)
@@ -1370,20 +1453,27 @@ def register_admin_routes(app):
             )
             kb_text = kb_content.decode('utf-8') if kb_content else ""
 
-            employee_ids = re.findall(r'\b\d{5,}\b', user_message)
+            employee_ids = list(dict.fromkeys(re.findall(r'\b\d{5,}\b', user_message)))
+            email_matches = list(dict.fromkeys(re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', user_message)))
             employee_data_text = ""
-            if employee_ids:
-                for emp_id in employee_ids[:5]:
-                    records = EmployeeRecord.query.filter_by(
-                        employee_id=emp_id
-                    ).all()
-                    if records:
-                        employee_data_text += f"\n\nEmployee ID {emp_id} Records:\n"
-                        for rec in records:
-                            employee_data_text += (
-                                f"- Level: {rec.level}, Qualifier: {rec.qualifier}, "
-                                f"Issuer: {rec.issuer}, Valid Till: {rec.valid_till}\n"
-                            )
+            for emp_id in employee_ids[:5]:
+                records = EmployeeRecord.query.filter_by(
+                    employee_id=emp_id
+                ).all()
+                if records:
+                    employee_data_text += "\n\n" + _build_employee_insight_snapshot(
+                        f"Employee ID {emp_id}",
+                        records
+                    )
+            for email in email_matches[:5]:
+                records = EmployeeRecord.query.filter(
+                    EmployeeRecord.email.ilike(email)
+                ).all()
+                if records:
+                    employee_data_text += "\n\n" + _build_employee_insight_snapshot(
+                        f"Email {email}",
+                        records
+                    )
 
             export_filters = _extract_export_filters_from_message(user_message)
             filtered_summary = ""
@@ -1428,6 +1518,10 @@ Instructions:
 - Use the database snapshot to ground high-level questions when no filters are provided.
 - The database includes: assessment_id, assessment_name, name, email, employee_id, final_completion_date, issuer, level, marks, qualifier, skill, skill_id, valid_till, wipro_function.
 - If filter context is provided, summarize it with KPIs and grounded insights.
+- If the question is about a specific employee (employee ID or email), include issuer-wise split, completion trendline, level distribution, and trained vs certified split in the response.
+- If the question compares multiple employees, include level-wise comparisons, trained vs certified comparisons, and completion trendline comparisons. Highlight similarities and outliers.
+- If the question is about a level or qualifier (e.g., "Level 3" or "Certified"), include the count and issuer-wise split in the response.
+- Always suggest relevant chart outputs based on the filters (issuer split, completion timeline, level distribution, qualifier split) and mention that Excel/PPTX exports are available for the same filters.
 - If asked about a specific employee not in the data, say you need to query the database.
 - Provide production-grade analysis with bullet points, KPIs, and next-step insights.
 - Offer segmentation options by issuer, certification (assessment), skill, level, qualifier, and Wipro function.

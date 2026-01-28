@@ -1373,6 +1373,10 @@
                 normalized.employee_id = normalized.employee_ids.join(',');
                 delete normalized.employee_ids;
             }
+            if (Array.isArray(normalized.emails)) {
+                normalized.email = normalized.emails.join(',');
+                delete normalized.emails;
+            }
             const params = new URLSearchParams(normalized);
             return `
                 <div class="export-actions">
