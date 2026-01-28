@@ -359,6 +359,50 @@ def register_admin_routes(app):
             + "\n".join(sample_rows)
         )
 
+    def _build_overall_summary() -> str:
+        total_records = db.session.query(func.count(EmployeeRecord.id)).scalar() or 0
+        unique_employees = db.session.query(
+            func.count(func.distinct(EmployeeRecord.employee_id))
+        ).filter(
+            EmployeeRecord.employee_id.isnot(None),
+            EmployeeRecord.employee_id != ''
+        ).scalar() or 0
+        date_range = db.session.query(
+            func.min(EmployeeRecord.final_completion_date),
+            func.max(EmployeeRecord.final_completion_date)
+        ).one()
+        earliest_date = date_range[0].strftime("%Y-%m-%d") if date_range[0] else "N/A"
+        latest_date = date_range[1].strftime("%Y-%m-%d") if date_range[1] else "N/A"
+
+        def _top_items(column, label, limit=5):
+            rows = db.session.query(
+                column,
+                func.count(EmployeeRecord.id)
+            ).filter(
+                column.isnot(None),
+                column != ''
+            ).group_by(
+                column
+            ).order_by(
+                func.count(EmployeeRecord.id).desc()
+            ).limit(limit).all()
+            if not rows:
+                return f"- Top {label}: N/A"
+            formatted = ", ".join([f"{value} ({count})" for value, count in rows])
+            return f"- Top {label}: {formatted}"
+
+        return (
+            "Current database snapshot:\n"
+            f"- Total records: {total_records}\n"
+            f"- Unique employees: {unique_employees}\n"
+            f"- Data range: {earliest_date} to {latest_date}\n"
+            f"{_top_items(EmployeeRecord.issuer, 'issuers')}\n"
+            f"{_top_items(EmployeeRecord.assessment_name, 'certifications')}\n"
+            f"{_top_items(EmployeeRecord.skill, 'skills')}\n"
+            f"{_top_items(EmployeeRecord.level, 'levels')}\n"
+            f"{_top_items(EmployeeRecord.wipro_function, 'functions')}"
+        )
+
     def _records_to_export_rows(records):
         rows = []
         for record in records:
@@ -1315,12 +1359,7 @@ def register_admin_routes(app):
             kb_content, error = s3_manager.read_file_from_s3(
                 'knowledge-base/employee_data.txt'
             )
-            if error or not kb_content:
-                return jsonify({
-                    "success": False,
-                    "error": "Knowledge base not found. Please refresh it first."
-                })
-            kb_text = kb_content.decode('utf-8')
+            kb_text = kb_content.decode('utf-8') if kb_content else ""
 
             employee_ids = re.findall(r'\b\d{5,}\b', user_message)
             employee_data_text = ""
@@ -1344,6 +1383,7 @@ def register_admin_routes(app):
                 filtered_records = query.all()
                 filtered_records = _filter_records_by_date(filtered_records, export_filters)
                 filtered_summary = _build_filtered_summary(filtered_records)
+            overall_summary = _build_overall_summary()
 
             employee_block = (
                 f"SPECIFIC EMPLOYEE DATA:{employee_data_text}"
@@ -1355,24 +1395,36 @@ def register_admin_routes(app):
                 if filtered_summary
                 else ""
             )
+            overall_block = (
+                f"DATABASE SNAPSHOT:\n{overall_summary}"
+                if overall_summary
+                else ""
+            )
+            kb_block = (
+                f"STATISTICAL DATA:\n{kb_text}"
+                if kb_text
+                else "STATISTICAL DATA:\nKnowledge base not available."
+            )
             system_prompt = f"""You are an AI assistant for the AI Academy Tracker system.
 
-STATISTICAL DATA:
-{kb_text}
+{kb_block}
 
 {employee_block}
 {filtered_block}
+{overall_block}
 
 Instructions:
-- Use the statistical data above for general queries about levels, issuers, skills, certifications, qualifiers, and functions
-- Use the specific employee data (if provided) for individual employee queries
-- The database includes: assessment_id, assessment_name, name, email, employee_id, final_completion_date, issuer, level, marks, qualifier, skill, skill_id, valid_till, wipro_function
-- If filter context is provided, summarize it with KPIs and grounded insights
-- If asked about a specific employee not in the data, say you need to query the database
-- Provide production-grade analysis with bullet points, KPIs, and next-step insights
-- Offer segmentation options by issuer, certification (assessment), skill, level, qualifier, and Wipro function
-- Highlight standout performers, gaps, and potential actions (enablement, training, hiring, or certification drives)
-- When a user mentions exporting, summarize the filters you interpreted from their request
+- Use the statistical data above for general queries about levels, issuers, skills, certifications, qualifiers, and functions.
+- Use the specific employee data (if provided) for individual employee queries.
+- Use the database snapshot to ground high-level questions when no filters are provided.
+- The database includes: assessment_id, assessment_name, name, email, employee_id, final_completion_date, issuer, level, marks, qualifier, skill, skill_id, valid_till, wipro_function.
+- If filter context is provided, summarize it with KPIs and grounded insights.
+- If asked about a specific employee not in the data, say you need to query the database.
+- Provide production-grade analysis with bullet points, KPIs, and next-step insights.
+- Offer segmentation options by issuer, certification (assessment), skill, level, qualifier, and Wipro function.
+- Highlight standout performers, gaps, and potential actions (enablement, training, hiring, or certification drives).
+- When a user mentions exporting, summarize the filters you interpreted from their request.
+- If the question is ambiguous, ask 1-2 clarifying questions and suggest the next best filters.
 
 Answer the user's question below."""
 
