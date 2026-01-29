@@ -424,33 +424,57 @@ def _build_bedrock_converse_kwargs(user_message: str, system_prompt: str) -> dic
     return kwargs
 
 
-def call_bedrock_with_context(user_message: str, system_prompt: str) -> str:
+def _is_guardrail_blocked(response: dict, text: str) -> bool:
+    stop_reason = str(response.get("stopReason", "")).lower()
+    if stop_reason in {"guardrail_intervened", "content_filtered", "content_filter", "blocked"}:
+        return True
+
+    guardrail = response.get("guardrail") or {}
+    guardrail_action = str(guardrail.get("action", "")).lower()
+    if guardrail_action in {"block", "blocked"}:
+        return True
+
+    if text:
+        lowered = text.lower()
+        if "blocked by our content filters" in lowered or "content filters" in lowered:
+            return True
+
+    return False
+
+
+def call_bedrock_with_context(user_message: str, system_prompt: str) -> tuple[str, bool]:
     """
     Call AWS Bedrock (Amazon Nova, or any configured model ID) with a system prompt.
     Uses the Bedrock Converse API for text chat.
+    Returns a tuple of (response_text, was_blocked).
     """
     try:
         if not magical_agent.bedrock_client:
-            return "Bedrock client is not available. Please check AWS configuration."
+            return "Bedrock client is not available. Please check AWS configuration.", False
 
         kwargs = _build_bedrock_converse_kwargs(user_message, system_prompt)
         response = magical_agent.bedrock_client.converse(**kwargs)
 
-        # Extract the first text block from the assistant's message
         output = response.get("output", {})
         message = output.get("message", {})
         content_blocks = message.get("content", []) or []
 
+        response_text = ""
         for block in content_blocks:
             text = block.get("text")
             if text:
-                return text
+                response_text = text
+                break
 
-        return "I was unable to generate a response from the model."
+        if not response_text:
+            response_text = "I was unable to generate a response from the model."
+
+        was_blocked = _is_guardrail_blocked(response, response_text)
+        return response_text, was_blocked
 
     except Exception as e:
         logger.error(f"Bedrock call error: {e}", exc_info=True)
-        return f"I encountered an error while calling Bedrock: {str(e)}"
+        return f"I encountered an error while calling Bedrock: {str(e)}", False
 
 
 # ---------------------------------------------------------------------------
