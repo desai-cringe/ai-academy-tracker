@@ -1507,14 +1507,17 @@
             document.getElementById('chat-typing').style.display = 'none';
         }
 
-        async function sendMessage(message) {
+        async function sendMessage(rawMessage, guidedMessage) {
             try {
                 const response = await fetch('/admin/chat-api', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({
+                        message: guidedMessage,
+                        raw_message: rawMessage
+                    })
                 });
 
                 const data = await response.json();
@@ -1568,7 +1571,8 @@
             sendBtn.disabled = true;
             showTyping();
             pendingResponseStart = performance.now();
-            await sendMessage(buildGuidedMessage(message));
+            const guidedMessage = buildGuidedMessage(message);
+            await sendMessage(message, guidedMessage);
             hideTyping();
             sendBtn.disabled = false;
             input.focus();
