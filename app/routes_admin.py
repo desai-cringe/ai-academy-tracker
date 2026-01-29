@@ -1548,7 +1548,18 @@ Instructions:
 
 Answer the user's question below."""
 
-            response_text = call_bedrock_with_context(user_message, system_prompt)
+            response_text, was_blocked = call_bedrock_with_context(
+                user_message,
+                system_prompt
+            )
+            if was_blocked:
+                return jsonify({
+                    "success": False,
+                    "error": (
+                        "The AI response was blocked by content filters. "
+                        "Please rephrase your request or remove sensitive data."
+                    )
+                })
 
             export_requested = bool(
                 re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", user_message, re.IGNORECASE)
