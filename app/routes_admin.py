@@ -128,6 +128,14 @@ def register_admin_routes(app):
         tokens = re.split(r"[\s,;]+", raw_value.strip())
         return [token for token in tokens if token]
 
+    def _phrase_in_message(phrase: str, message: str) -> bool:
+        if not phrase or not message:
+            return False
+        escaped = re.escape(phrase.strip())
+        escaped = re.sub(r"\\\s+", r"\\s+", escaped)
+        pattern = rf"(?<!\w){escaped}(?!\w)"
+        return re.search(pattern, message, re.IGNORECASE) is not None
+
     def _normalize_export_filters(source: dict) -> dict:
         employee_id_raw = source.get("employee_id", "").strip()
         employee_ids = _parse_multi_values(employee_id_raw)
@@ -1012,10 +1020,11 @@ def register_admin_routes(app):
             key=len,
             reverse=True
         )
-        for issuer in issuers:
-            if issuer.lower() in message.lower():
-                filters["issuer"] = issuer
-                break
+        if not filters.get("issuer"):
+            for issuer in issuers:
+                if _phrase_in_message(issuer, message):
+                    filters["issuer"] = issuer
+                    break
 
         skill_candidates = db.session.query(func.distinct(EmployeeRecord.skill)).filter(
             EmployeeRecord.skill.isnot(None),
@@ -1026,10 +1035,11 @@ def register_admin_routes(app):
             key=len,
             reverse=True
         )
-        for skill in skills:
-            if skill.lower() in message.lower():
-                filters["skill"] = skill
-                break
+        if not filters.get("skill"):
+            for skill in skills:
+                if _phrase_in_message(skill, message):
+                    filters["skill"] = skill
+                    break
 
         assessment_candidates = db.session.query(func.distinct(EmployeeRecord.assessment_name)).filter(
             EmployeeRecord.assessment_name.isnot(None),
@@ -1040,10 +1050,11 @@ def register_admin_routes(app):
             key=len,
             reverse=True
         )
-        for assessment in assessments:
-            if assessment.lower() in message.lower():
-                filters["assessment_name"] = assessment
-                break
+        if not filters.get("assessment_name"):
+            for assessment in assessments:
+                if _phrase_in_message(assessment, message):
+                    filters["assessment_name"] = assessment
+                    break
 
         function_candidates = db.session.query(func.distinct(EmployeeRecord.wipro_function)).filter(
             EmployeeRecord.wipro_function.isnot(None),
@@ -1054,10 +1065,11 @@ def register_admin_routes(app):
             key=len,
             reverse=True
         )
-        for function in functions:
-            if function.lower() in message.lower():
-                filters["wipro_function"] = function
-                break
+        if not filters.get("wipro_function"):
+            for function in functions:
+                if _phrase_in_message(function, message):
+                    filters["wipro_function"] = function
+                    break
 
         field_match = re.search(
             r"(?:field|column)\s+(?P<column>[a-zA-Z_\s]+?)\s*(?:is|=|:)\s*(?P<value>[^,]+)",
@@ -1499,8 +1511,9 @@ def register_admin_routes(app):
     def chat_api():
         """Smart chat API with knowledge base + database queries (via Bedrock)."""
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             user_message = data.get('message', '').strip()
+            raw_message = data.get('raw_message', '').strip() or user_message
             if not user_message:
                 return jsonify({"success": False, "error": "Please enter a message"})
 
@@ -1531,7 +1544,7 @@ def register_admin_routes(app):
                         records
                     )
 
-            export_filters = _extract_export_filters_from_message(user_message)
+            export_filters = _extract_export_filters_from_message(raw_message)
             filtered_summary = ""
             if export_filters:
                 query = _apply_export_filters(db.session.query(EmployeeRecord), export_filters)
@@ -1601,9 +1614,12 @@ Answer the user's question below."""
                 })
 
             export_requested = bool(
-                re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", user_message, re.IGNORECASE)
+                re.search(r"\b(export|download|excel|xlsx|pptx|powerpoint|report)\b", raw_message, re.IGNORECASE)
             )
-            export_ready = export_requested or bool(export_filters)
+            full_export_requested = bool(
+                re.search(r"\b(all|full|entire|whole)\s+(records|dataset|data)\b", raw_message, re.IGNORECASE)
+            )
+            export_ready = bool(export_filters) or (export_requested and full_export_requested)
             return jsonify({
                 "success": True,
                 "response": response_text,
