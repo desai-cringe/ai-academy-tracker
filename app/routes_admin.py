@@ -912,6 +912,26 @@ def register_admin_routes(app):
     def _extract_export_filters_from_message(message: str) -> dict:
         filters = {}
         normalized_message = message.lower()
+
+        def _extract_keyword_value(keyword: str, *, avoid: str = "") -> str:
+            pattern = rf"\b{keyword}\b"
+            if avoid:
+                pattern = rf"\b{keyword}\b(?!\s*{avoid}\b)"
+            match = re.search(
+                rf"{pattern}\s*(?:is|=|:)?\s*([a-zA-Z0-9][\w\s\-./&+]+)",
+                message,
+                re.IGNORECASE
+            )
+            if not match:
+                return ""
+            value = match.group(1).strip()
+            value = re.split(
+                r"\b(?:and|or|for|with|in|on|to|of|export|pptx|ppt|powerpoint|excel|xlsx|report|summary|compare|comparison|level|qualifier|issuer|function|skill|assessment|certification)\b",
+                value,
+                maxsplit=1,
+                flags=re.IGNORECASE
+            )[0].strip()
+            return value.rstrip(".,;:")
         level_match = re.search(r"level\s*(\d+)", message, re.IGNORECASE)
         if level_match:
             filters["level"] = f"Level {level_match.group(1)}"
@@ -1115,6 +1135,25 @@ def register_admin_routes(app):
                         filters["email"] = emails[0]
                 else:
                     filters[key] = value
+
+        if not filters.get("skill"):
+            skill_value = _extract_keyword_value("skill", avoid="id")
+            if skill_value:
+                filters["skill"] = skill_value
+
+        if not filters.get("assessment_name"):
+            assessment_value = _extract_keyword_value("assessment", avoid="id")
+            if assessment_value:
+                filters["assessment_name"] = assessment_value
+            else:
+                cert_value = _extract_keyword_value("certification", avoid="id")
+                if cert_value:
+                    filters["assessment_name"] = cert_value
+
+        if not filters.get("wipro_function"):
+            function_value = _extract_keyword_value("function")
+            if function_value:
+                filters["wipro_function"] = function_value
 
         if not filters.get("employee_id") and not filters.get("employee_ids"):
             numeric_tokens = re.findall(r"\b\d{4,}\b", message)
