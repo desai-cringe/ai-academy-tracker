@@ -16,7 +16,7 @@ from flask import (
     url_for, flash, send_file
 )
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 from dateutil import parser as date_parser
@@ -437,8 +437,25 @@ def register_admin_routes(app):
             func.min(EmployeeRecord.final_completion_date),
             func.max(EmployeeRecord.final_completion_date)
         ).one()
-        earliest_date = date_range[0].strftime("%Y-%m-%d") if date_range[0] else "N/A"
-        latest_date = date_range[1].strftime("%Y-%m-%d") if date_range[1] else "N/A"
+
+        def _format_date_value(value) -> str:
+            if not value:
+                return "N/A"
+            if isinstance(value, (datetime, date)):
+                return value.strftime("%Y-%m-%d")
+            if isinstance(value, str):
+                try:
+                    parsed = date_parser.parse(value)
+                except Exception:
+                    return value
+                return parsed.strftime("%Y-%m-%d")
+            try:
+                return value.strftime("%Y-%m-%d")
+            except Exception:
+                return str(value)
+
+        earliest_date = _format_date_value(date_range[0])
+        latest_date = _format_date_value(date_range[1])
 
         def _top_items(column, label, limit=5):
             rows = db.session.query(
