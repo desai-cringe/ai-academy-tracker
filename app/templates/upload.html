@@ -447,7 +447,6 @@
             <div class="nav-links">
                 <span>{{ username }}</span>
                 <a href="/admin" class="primary-link">Admin Dashboard</a>
-                <a href="/admin/agentic">Agentic Reports</a>
                 <a href="/admin/splits">Certification Splits</a>
                 <a href="/admin/explorer">Data Explorer</a>
                 <a href="/admin/change-password">Change Password</a>
@@ -530,21 +529,6 @@
                 <div class="stats-grid" id="stats-grid">
                     <!-- populated by JS -->
                 </div>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>Generate certificates</h2>
-            <p class="card-subtitle">
-                Create Wipro-branded certificates for all records currently stored in the database. Use this
-                button if you need to regenerate certificates for existing employees.
-            </p>
-            <button type="button" class="submit-btn" id="generate-certificates-btn">
-                Generate certificates for all records
-            </button>
-            <div class="stats-display" id="cert-status" style="display: none;">
-                <h3>Certificate generation</h3>
-                <div class="stats-grid" id="cert-stats-grid"></div>
             </div>
         </section>
 
@@ -688,23 +672,6 @@
             `;
         }
 
-        if (stats.certificates) {
-            statsHTML += `
-                <div class="stat-item">
-                    <div class="number">${stats.certificates.created ?? 0}</div>
-                    <div class="label">Certificates created</div>
-                </div>
-                <div class="stat-item">
-                    <div class="number">${stats.certificates.skipped ?? 0}</div>
-                    <div class="label">Certificates skipped</div>
-                </div>
-                <div class="stat-item">
-                    <div class="number">${stats.certificates.failed ?? 0}</div>
-                    <div class="label">Certificate failures</div>
-                </div>
-            `;
-        }
-
         statsGrid.innerHTML = statsHTML;
         statsDisplay.style.display = 'block';
     }
@@ -832,65 +799,11 @@
         }
     }
 
-    async function handleGenerateCertificates() {
-        const button = document.getElementById('generate-certificates-btn');
-        const statusPanel = document.getElementById('cert-status');
-        const statusGrid = document.getElementById('cert-stats-grid');
-        const originalText = button.textContent;
-
-        try {
-            button.disabled = true;
-            button.textContent = 'Generating certificates…';
-            statusPanel.style.display = 'none';
-
-            const response = await fetch('/admin/generate-certificates', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                showSuccess(data.message || 'Certificates generated successfully.');
-            } else {
-                throw new Error(data.error || 'Certificate generation failed');
-            }
-
-            if (data.counts) {
-                statusGrid.innerHTML = `
-                    <div class="stat-item">
-                        <div class="number">${data.counts.created ?? 0}</div>
-                        <div class="label">Created</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="number">${data.counts.skipped ?? 0}</div>
-                        <div class="label">Skipped</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="number">${data.counts.failed ?? 0}</div>
-                        <div class="label">Failed</div>
-                    </div>
-                `;
-                statusPanel.style.display = 'block';
-            }
-        } catch (error) {
-            console.error('Certificate generation error:', error);
-            showError(`Certificate generation failed: ${error.message}`);
-        } finally {
-            button.disabled = false;
-            button.textContent = originalText;
-        }
-    }
-
     // Initialize with replace mode selected
     selectMode('replace');
 
     // Handle form submission
     document.getElementById('upload-form').addEventListener('submit', handleUpload);
-    document.getElementById('generate-certificates-btn').addEventListener('click', handleGenerateCertificates);
-
     // Drag & drop
     const fileInputBox = document.querySelector('.file-input');
 
