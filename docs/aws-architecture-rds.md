@@ -6,36 +6,36 @@ This document provides a deployable AWS architecture diagram for the current Fla
 
 ```mermaid
 flowchart TB
-    U["Users and Admins\nBrowser"] -->|HTTPS| CF["CloudFront and ACM TLS optional"]
-    CF --> ALB["Application Load Balancer"]
-    ALB --> APP["Flask App\nECS Fargate service or EC2 ASG"]
+    U[Users / Admins<br/>Browser] -->|HTTPS| CF[CloudFront + ACM TLS (optional)]
+    CF --> ALB[Application Load Balancer]
+    ALB --> APP[Flask App<br/>ECS Fargate Service or EC2 ASG]
 
-    subgraph VPC["VPC across two or more AZs"]
-      subgraph PUB["Public subnets"]
+    subgraph VPC[VPC (2+ AZ)]
+      subgraph PUB[Public Subnets]
         ALB
-        NAT["NAT Gateway"]
+        NAT[NAT Gateway]
       end
 
-      subgraph PRIV["Private app subnets"]
+      subgraph PRIV[Private App Subnets]
         APP
       end
 
-      subgraph DBSUB["Private database subnets"]
-        RDS[("Amazon RDS PostgreSQL\nMulti-AZ")]
+      subgraph DBSUB[Private DB Subnets]
+        RDS[(Amazon RDS PostgreSQL<br/>Multi-AZ)]
       end
 
-      subgraph STOR["Data and AI integrations"]
-        S3[("S3 bucket\nuploads backups kb voice")]
-        BR["Amazon Bedrock\nNova Pro Converse API"]
-        CW["CloudWatch logs and metrics"]
+      subgraph STOR[Data + AI Integrations]
+        S3[(S3 Bucket<br/>uploads/backups/kb/voice)]
+        BR[Amazon Bedrock<br/>Nova Pro Converse API]
+        CW[CloudWatch Logs/Metrics]
       end
     end
 
-    APP -->|"SQLAlchemy and psycopg2"| RDS
-    APP -->|"boto3 S3 API"| S3
-    APP -->|"boto3 Bedrock runtime"| BR
-    APP -->|"App logs and metrics"| CW
-    APP -->|"Outbound AWS API calls"| NAT
+    APP -->|SQLAlchemy / psycopg2| RDS
+    APP -->|boto3 S3 API| S3
+    APP -->|boto3 Bedrock Runtime| BR
+    APP -->|App logs/metrics| CW
+    APP -->|Outbound AWS API calls| NAT
 ```
 
 ## 2) Runtime flow diagram (how requests move)
