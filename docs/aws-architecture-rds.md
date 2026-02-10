@@ -6,11 +6,11 @@ This document provides a deployable AWS architecture diagram for the current Fla
 
 ```mermaid
 flowchart TB
-    U[Users and Admins Browser] --> CF[CloudFront and ACM TLS]
+    U[Users / Admins<br/>Browser] -->|HTTPS| CF[CloudFront + ACM TLS (optional)]
     CF --> ALB[Application Load Balancer]
-    ALB --> APP[Flask App on ECS Fargate or EC2]
+    ALB --> APP[Flask App<br/>ECS Fargate Service or EC2 ASG]
 
-    subgraph VPC[VPC]
+    subgraph VPC[VPC (2+ AZ)]
       subgraph PUB[Public Subnets]
         ALB
         NAT[NAT Gateway]
@@ -21,21 +21,21 @@ flowchart TB
       end
 
       subgraph DBSUB[Private DB Subnets]
-        RDS[(Amazon RDS PostgreSQL Multi AZ)]
+        RDS[(Amazon RDS PostgreSQL<br/>Multi-AZ)]
       end
 
-      subgraph STOR[Data and AI Services]
-        S3[(S3 Bucket)]
-        BR[Amazon Bedrock Runtime]
-        CW[CloudWatch]
+      subgraph STOR[Data + AI Integrations]
+        S3[(S3 Bucket<br/>uploads/backups/kb/voice)]
+        BR[Amazon Bedrock<br/>Nova Pro Converse API]
+        CW[CloudWatch Logs/Metrics]
       end
     end
 
-    APP --> RDS
-    APP --> S3
-    APP --> BR
-    APP --> CW
-    APP --> NAT
+    APP -->|SQLAlchemy / psycopg2| RDS
+    APP -->|boto3 S3 API| S3
+    APP -->|boto3 Bedrock Runtime| BR
+    APP -->|App logs/metrics| CW
+    APP -->|Outbound AWS API calls| NAT
 ```
 
 ## 2) Runtime flow diagram (how requests move)
@@ -43,31 +43,31 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant User as Browser User
-    participant App as Flask App
+    participant App as Flask App (/admin/*)
     participant DB as RDS PostgreSQL
     participant S3 as S3 Bucket
     participant BR as Bedrock Nova Pro
 
-    User->>App: Login and dashboard request
-    App->>DB: Query EmployeeRecord and aggregates
-    DB-->>App: Records and KPIs
-    App-->>User: HTML with charts and filters
+    User->>App: Login + dashboard request
+    App->>DB: Query EmployeeRecord + aggregates
+    DB-->>App: Records/KPIs
+    App-->>User: HTML + charts + filters
 
-    User->>App: Upload CSV or XLSX
-    App->>S3: Store source backup and KB artifacts
-    App->>DB: Upsert or append records
-    App-->>User: Upload summary and stats
+    User->>App: Upload CSV/XLSX
+    App->>S3: Store source/backup/KB artifacts
+    App->>DB: Upsert/append records in batches
+    App-->>User: Upload summary + stats
 
-    User->>App: Chat prompt to admin chat API
+    User->>App: Chat prompt (/admin/chat-api)
     App->>DB: Build filtered context snapshots
-    App->>S3: Read knowledge base text
-    App->>BR: Converse API call with prompts
+    App->>S3: Read knowledge-base text
+    App->>BR: Converse API call with system prompt + user prompt
     BR-->>App: AI response text
-    App-->>User: Chat response and export filters
+    App-->>User: Chat response + export-ready filters
 
-    User->>App: Export request with format pptx
+    User->>App: Export request (/admin/exports?format=pptx)
     App->>DB: Fetch filtered records
-    App-->>User: Generated PPTX or XLSX stream
+    App-->>User: Generated PPTX/XLSX stream
 ```
 
 ## 3) AWS services mapping to current code
